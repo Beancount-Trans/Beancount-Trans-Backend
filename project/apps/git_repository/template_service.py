@@ -32,7 +32,7 @@ class GitHubTemplateService:
     """GitHub 模板仓库服务"""
 
     # 固定的模板仓库配置
-    TEMPLATE_REPOSITORY_URL = 'https://github.com/dhr2333/Beancount-Trans-Assets'
+    TEMPLATE_REPOSITORY_URL = 'https://github.com/Beancount-Trans/Beancount-Trans-Assets'
     TEMPLATE_REPOSITORY_BRANCH = 'main'
 
     def __init__(self):

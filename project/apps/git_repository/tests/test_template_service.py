@@ -30,17 +30,17 @@ class TestGitHubTemplateService(TestCase):
     def test_parse_repository_url_valid(self):
         """测试解析有效的仓库 URL"""
         owner, repo = self.service._parse_repository_url(
-            'https://github.com/dhr2333/Beancount-Trans-Assets'
+            'https://github.com/Beancount-Trans/Beancount-Trans-Assets'
         )
-        self.assertEqual(owner, 'dhr2333')
+        self.assertEqual(owner, 'Beancount-Trans')
         self.assertEqual(repo, 'Beancount-Trans-Assets')
 
     def test_parse_repository_url_with_git_suffix(self):
         """测试解析带 .git 后缀的仓库 URL"""
         owner, repo = self.service._parse_repository_url(
-            'https://github.com/dhr2333/Beancount-Trans-Assets.git'
+            'https://github.com/Beancount-Trans/Beancount-Trans-Assets.git'
         )
-        self.assertEqual(owner, 'dhr2333')
+        self.assertEqual(owner, 'Beancount-Trans')
         self.assertEqual(repo, 'Beancount-Trans-Assets')
 
     def test_parse_repository_url_invalid(self):

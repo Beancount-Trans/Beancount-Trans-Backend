@@ -2,7 +2,7 @@ import type { Options } from 'semantic-release';
 
 const config: Options = {
   branches: ['main'],
-  repositoryUrl: 'https://github.com/dhr2333/Beancount-Trans-Backend',
+  repositoryUrl: 'https://github.com/Beancount-Trans/Beancount-Trans-Backend',
   tagFormat: '${version}',
   plugins: [
     [

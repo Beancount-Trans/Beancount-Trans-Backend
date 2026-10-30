@@ -16,7 +16,7 @@ pipeline {
         IMAGE_NAME = "beancount-trans-backend"
 
         // GitHub配置
-        GITHUB_REPO = 'dhr2333/Beancount-Trans-Backend'
+        GITHUB_REPO = 'Beancount-Trans/Beancount-Trans-Backend'
         GITHUB_API_URL = 'https://api.github.com'
 
         // 报告目录 - 使用安全的路径格式避免URL编码问题

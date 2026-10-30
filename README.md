@@ -81,4 +81,4 @@ Beancount-Trans-Backend/
 
 ## 许可证
 
-该项目的许可证信息，请查看 [LICENSE](https://github.com/dhr2333/Beancount-Trans-Backend/blob/main/LICENSE.txt)。
+该项目的许可证信息，请查看 [LICENSE](https://github.com/Beancount-Trans/Beancount-Trans-Backend/blob/main/LICENSE.txt)。
