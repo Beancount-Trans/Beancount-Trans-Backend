@@ -1,5 +1,11 @@
 # Changelog
 
+## [6.1.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.0.3...6.1.0) (2026-10-31)
+
+### Features
+
+* **usage:** 新增 Core 侧用量计量骨架 ([b8d1d9d](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/b8d1d9dcdc4e93fa346a3aa7507c99b36582f33e))
+
 ## [6.0.3](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.0.2...6.0.3) (2026-10-31)
 
 ### Bug Fixes
