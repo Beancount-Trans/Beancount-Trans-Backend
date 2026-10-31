@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from dateutil.relativedelta import relativedelta
 from dateutil.rrule import (
     rrule, DAILY, WEEKLY, MONTHLY, YEARLY,
     MO, TU, WE, TH, FR, SA, SU,
@@ -412,8 +413,43 @@ class RecurrenceCalculator:
                      **spec.to_rrule_kwargs())
 
     @staticmethod
+    def _uses_implicit_monthday(spec: RecurrenceSpec) -> bool:
+        """是否为未显式指定月内日期的「每 N 个月」规则
+
+        这种规则没有 BYMONTHDAY / BYDAY，dateutil 会用 dtstart 的「日」作为隐式锚点，
+        直接跳过不存在该日的月份（1 月 31 日的下一次会变成 3 月 31 日、跨过 2 月），
+        与「每 N 个月」的业务语义不符，需改为按月末截断计算。
+        """
+        return (
+            spec.freq == 'MONTHLY'
+            and spec.interval >= 1
+            and not (spec.byweekday or spec.bymonthday or spec.bysetpos or spec.bymonth)
+        )
+
+    @staticmethod
+    def _shift_months(dtstart: date, months: int) -> date:
+        """从 dtstart 按自然月平移，目标月没有该日时截断到月末
+
+        如 2026-01-31 + 1 个月 = 2026-02-28，+ 2 个月 = 2026-03-31。
+        """
+        return dtstart + relativedelta(months=months)
+
+    @staticmethod
+    def _implicit_monthly_steps(spec: RecurrenceSpec, dtstart: date, after: date) -> int:
+        """首个严格晚于 after 的发生日对应的「月步数」（dtstart 自身为 0 步）"""
+        months = 0
+        cand = dtstart
+        while cand <= after:
+            months += spec.interval
+            cand = RecurrenceCalculator._shift_months(dtstart, months)
+        return months
+
+    @staticmethod
     def next_occurrence(spec: RecurrenceSpec, dtstart: date, after: date) -> date | None:
         """返回严格晚于 after 的下一次发生日期；规则不可满足时返回 None"""
+        if RecurrenceCalculator._uses_implicit_monthday(spec):
+            steps = RecurrenceCalculator._implicit_monthly_steps(spec, dtstart, after)
+            return RecurrenceCalculator._shift_months(dtstart, steps)
         rule = RecurrenceCalculator._build_rrule(spec, dtstart)
         nxt = rule.after(RecurrenceCalculator._to_datetime(after), inc=False)
         return nxt.date() if nxt is not None else None
@@ -421,6 +457,9 @@ class RecurrenceCalculator:
     @staticmethod
     def first_on_or_after(spec: RecurrenceSpec, seed: date) -> date | None:
         """返回首个不早于 seed 的发生日期；规则不可满足时返回 None"""
+        if RecurrenceCalculator._uses_implicit_monthday(spec):
+            # 「每 N 个月」以 seed 为锚点必然可满足，首个发生日就是 seed
+            return seed
         rule = RecurrenceCalculator._build_rrule(spec, seed)
         nxt = rule.after(
             RecurrenceCalculator._to_datetime(seed - timedelta(days=1)), inc=False
@@ -431,6 +470,14 @@ class RecurrenceCalculator:
     def next_occurrences(spec: RecurrenceSpec, dtstart: date, after: date,
                          count: int) -> list[date]:
         """返回严格晚于 after 的前 count 次发生日期（不足则返回更少）"""
+        if RecurrenceCalculator._uses_implicit_monthday(spec):
+            steps = RecurrenceCalculator._implicit_monthly_steps(spec, dtstart, after)
+            return [
+                RecurrenceCalculator._shift_months(
+                    dtstart, steps + i * spec.interval
+                )
+                for i in range(count)
+            ]
         rule = RecurrenceCalculator._build_rrule(spec, dtstart)
         occurrences = rule.xafter(
             RecurrenceCalculator._to_datetime(after), count=count, inc=False

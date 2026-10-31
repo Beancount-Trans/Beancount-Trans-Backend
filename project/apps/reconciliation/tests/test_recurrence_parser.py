@@ -170,6 +170,42 @@ def test_next_occurrences_count_and_increasing():
     assert result == [date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 19)]
 
 
+def test_next_occurrence_monthly_clamps_to_month_end():
+    """每 N 个月未指定日：月末日期截断到目标月末，而不是跳过该月"""
+    spec = RecurrenceParser.parse('every month')
+    assert RecurrenceCalculator.next_occurrence(
+        spec, date(2026, 1, 31), date(2026, 1, 31)
+    ) == date(2026, 2, 28)
+    assert RecurrenceCalculator.next_occurrence(
+        spec, date(2026, 1, 31), date(2026, 2, 28)
+    ) == date(2026, 3, 31)
+    assert RecurrenceCalculator.next_occurrence(
+        spec, date(2026, 1, 31), date(2026, 3, 31)
+    ) == date(2026, 4, 30)
+
+
+def test_next_occurrences_monthly_clamps_to_month_end():
+    """每 N 个月：连续预览保持在月末，不丢月份"""
+    spec = RecurrenceParser.parse('every month')
+    assert RecurrenceCalculator.next_occurrences(
+        spec, date(2026, 1, 31), date(2026, 1, 31), 3
+    ) == [date(2026, 2, 28), date(2026, 3, 31), date(2026, 4, 30)]
+
+
+def test_next_occurrence_monthly_interval_keeps_anchor():
+    """每 2 个月：跨月依然以起始日为锚点，不因月末截断累积漂移"""
+    spec = RecurrenceParser.parse('every 2 months')
+    assert RecurrenceCalculator.next_occurrence(
+        spec, date(2026, 1, 31), date(2026, 1, 31)
+    ) == date(2026, 3, 31)
+    assert RecurrenceCalculator.next_occurrence(
+        spec, date(2026, 1, 31), date(2026, 3, 31)
+    ) == date(2026, 5, 31)
+    assert RecurrenceCalculator.first_on_or_after(
+        spec, date(2026, 1, 31)
+    ) == date(2026, 1, 31)
+
+
 def test_impossible_rule_returns_none():
     """不可满足的规则（每年 2 月 30 日）→ None，而非死循环"""
     spec = RecurrenceParser.parse('every February on the 30th')
