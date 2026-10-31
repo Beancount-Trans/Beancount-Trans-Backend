@@ -81,4 +81,4 @@ Beancount-Trans-Backend/
 
 ## 许可证
 
-该项目的许可证信息，请查看 [LICENSE](https://github.com/Beancount-Trans/Beancount-Trans-Backend/blob/main/LICENSE.txt)。
+本项目以 [GNU AGPL-3.0-or-later](https://github.com/Beancount-Trans/Beancount-Trans-Backend/blob/main/LICENSE.txt) 许可证发布。如果你修改了本项目并通过网络向用户提供服务，需按 AGPL-3.0 第 13 条公开修改后的源代码。
