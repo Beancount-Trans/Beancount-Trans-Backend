@@ -1,5 +1,11 @@
 # Changelog
 
+## [6.0.3](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.0.2...6.0.3) (2026-10-31)
+
+### Bug Fixes
+
+* **recurrence:** 修复月度重复规则的月末日期计算问题 ([5dca10a](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/5dca10a67a6ebf63730cd804feca9b60061d97b5))
+
 ## [6.0.2](https://github.com/dhr2333/Beancount-Trans-Backend/compare/6.0.1...6.0.2) (2026-10-24)
 
 ### Bug Fixes
