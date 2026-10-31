@@ -53,9 +53,19 @@ class LedgerQueryService:
         conn.attach(f'beancount:{self.ledger_path}')
         return conn
 
-    def execute(self, query: str, *, enrich: bool = True) -> BQLQueryResult:
-        bql = validate_bql(query)
-        conn = self._connect()
+    def execute(self, query: str, *, enrich: bool = True, meter: bool = True) -> BQLQueryResult:
+        try:
+            bql = validate_bql(query)
+        except BQLValidationError as exc:
+            self._record_bql(meter, ok=False, error=str(exc))
+            raise
+
+        try:
+            conn = self._connect()
+        except Exception as exc:
+            self._record_bql(meter, ok=False, error=f'{type(exc).__name__}: {exc}')
+            raise
+
         try:
             cursor = conn.execute(bql)
             rows = cursor.fetchall()
@@ -75,20 +85,37 @@ class LedgerQueryService:
             if enrich and result_text:
                 path_map = build_path_to_description_map(self.user)
                 result_text = enrich_bql_result_text(result_text, path_map)
+            self._record_bql(meter, ok=True, row_count=row_count)
             return BQLQueryResult(
                 bql=bql,
                 result_text=result_text or '(无结果)',
                 row_count=row_count,
                 truncated=truncated,
             )
-        except BQLValidationError:
+        except BQLValidationError as exc:
+            self._record_bql(meter, ok=False, error=str(exc))
             raise
         except CompilationError as exc:
             logger.warning('BQL 编译失败: %s — %s', bql, exc)
+            self._record_bql(meter, ok=False, error=f'CompilationError: {exc}')
             raise ValueError(format_bql_error(exc)) from exc
         except Exception as exc:
             logger.exception('BQL 执行失败: %s', bql)
+            self._record_bql(meter, ok=False, error=f'{type(exc).__name__}: {exc}')
             raise ValueError(format_bql_error(exc)) from exc
+
+    def _record_bql(self, meter: bool, *, ok: bool, row_count: int = 0, error: str = '') -> None:
+        """记录 BQL 用量；内部系统调用（meter=False）不计数。"""
+        if not meter:
+            return
+        from project.apps.usage.services import record_bql
+
+        record_bql(
+            user_id=getattr(self.user, 'id', None),
+            ok=ok,
+            row_count=row_count,
+            error=error,
+        )
 
     def list_accounts(self, limit: int = 200) -> list[str]:
         """获取账本中的账户列表。"""
@@ -98,6 +125,7 @@ class LedgerQueryService:
             result = self.execute(
                 f'SELECT DISTINCT account ORDER BY account LIMIT {int(limit)}',
                 enrich=False,
+                meter=False,
             )
             accounts = []
             for line in result.result_text.splitlines():

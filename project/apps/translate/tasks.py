@@ -17,6 +17,19 @@ import time
 logger = logging.getLogger(__name__)
 
 
+def _record_parse_usage(task_id, user_id, status, entries=0, error=''):
+    """记录解析用量（延迟导入，避免 app 加载顺序问题；内部已吞异常）。"""
+    from project.apps.usage.services import record_parse
+
+    record_parse(
+        task_id=task_id,
+        user_id=user_id,
+        status=status,
+        entries=entries,
+        error=error,
+    )
+
+
 @shared_task(bind=True)
 def parse_single_file_task(self, file_id, user_id, args):
     task_id = self.request.id
@@ -101,6 +114,7 @@ def parse_single_file_task(self, file_id, user_id, args):
             parse_file.status = 'failed'
             parse_file.error_message = errors[-1] if errors else '解析失败'
             parse_file.save()
+            _record_parse_usage(task_id, user_id, 'failed', error=parse_file.error_message)
             cache.set(f'task_status:{task_id}', {
                 'status': 'failed',
                 'file_id': file_id,
@@ -113,6 +127,7 @@ def parse_single_file_task(self, file_id, user_id, args):
             parse_file.status = 'failed'
             parse_file.error_message = '未解析到有效交易记录'
             parse_file.save()
+            _record_parse_usage(task_id, user_id, 'failed', error=parse_file.error_message)
             cache.set(f'task_status:{task_id}', {
                 'status': 'failed',
                 'file_id': file_id,
@@ -216,6 +231,7 @@ def parse_single_file_task(self, file_id, user_id, args):
                 final_status = 'pending_review' if refs else 'parsed'
                 parse_file.status = final_status
                 parse_file.save()
+                _record_parse_usage(task_id, user_id, 'ok', entries=len(kept))
             finally:
                 if acquired:
                     EntryReviewQueueService.release_lock(user_id)
@@ -236,6 +252,7 @@ def parse_single_file_task(self, file_id, user_id, args):
             # 更新状态
             parse_file.status = 'parsed'
             parse_file.save()
+            _record_parse_usage(task_id, user_id, 'ok', entries=len(formatted_data))
 
             # 更新状态为parsed
             cache.set(f'task_status:{task_id}', {
@@ -264,6 +281,7 @@ def parse_single_file_task(self, file_id, user_id, args):
 
         parse_file.error_message = str(e)
         parse_file.save()
+        _record_parse_usage(task_id, user_id, 'failed', error=str(e))
         
         # 更新 Redis 状态
         cache.set(f'task_status:{task_id}', {

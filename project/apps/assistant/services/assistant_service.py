@@ -8,7 +8,7 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 
 from project.apps.assistant.models import SharedLedgerBinding
 
@@ -42,6 +42,31 @@ from .schema_provider import (
 from .shared_ledger import touch_usage
 
 logger = logging.getLogger(__name__)
+
+
+def _record_llm_usage(
+    user,
+    usage,
+    model: str,
+    provider: LlmProvider,
+    *,
+    status: str = 'ok',
+    reason: str = '',
+) -> None:
+    """记录一轮 LLM 调用的 token 用量（延迟导入，内部已吞异常）。"""
+    from project.apps.usage.services import record_llm_tokens
+
+    prompt_tokens = int(getattr(usage, 'prompt_tokens', 0) or 0) if usage else 0
+    completion_tokens = int(getattr(usage, 'completion_tokens', 0) or 0) if usage else 0
+    record_llm_tokens(
+        user_id=getattr(user, 'id', None),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        model=model,
+        byok=getattr(provider, 'source', '') == 'user',
+        status=status,
+        reason=reason or ('' if usage else 'no_usage'),
+    )
 
 PROVIDER_NOT_CONFIGURED_MESSAGE = (
     '尚未配置助手模型，请在「输出配置」的账本助手中填写接口与密钥（Ollama 可省略密钥）。'
@@ -499,6 +524,17 @@ class AssistantService:
             timeout=httpx.Timeout(10.0, read=120.0),
         )
 
+    def _create_stream(self, client: OpenAI, kwargs: dict[str, Any]):
+        """发起流式请求；提供方不支持 stream_options 时去掉该参数重试一次。"""
+        try:
+            return client.chat.completions.create(**kwargs)
+        except (TypeError, BadRequestError):
+            if 'stream_options' not in kwargs:
+                raise
+            logger.warning('提供方不支持 stream_options，本次调用不计 token 用量')
+            retry_kwargs = {key: value for key, value in kwargs.items() if key != 'stream_options'}
+            return client.chat.completions.create(**retry_kwargs)
+
     def _self_ledger_missing_message(self, ledger: str) -> str | None:
         """选中 self 但本人账本不存在、且存在其他可选账本时，返回可读提示。"""
         if ledger != 'self' or self.ledger_query.ledger_exists():
@@ -718,6 +754,8 @@ class AssistantService:
             'model': self.model,
             'messages': llm_messages,
             'stream': True,
+            # 要求流式响应在末尾 chunk 返回 token 用量，用于计量
+            'stream_options': {'include_usage': True},
             **build_completion_extras(self.provider, deep_think=self.deep_think),
         }
         if not self.thinking_enabled:
@@ -731,36 +769,53 @@ class AssistantService:
         reasoning_parts: list[str] = []
         tool_calls_map: dict[int, _AccumulatedToolCall] = {}
 
-        stream = client.chat.completions.create(**kwargs)
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta.tool_calls:
-                for tool_call in delta.tool_calls:
-                    entry = tool_calls_map.setdefault(tool_call.index, _AccumulatedToolCall())
-                    if tool_call.id:
-                        entry.id = tool_call.id
-                    if tool_call.function.name:
-                        entry.name = tool_call.function.name
-                    if tool_call.function.arguments:
-                        entry.arguments += tool_call.function.arguments
-            reasoning_content = getattr(delta, 'reasoning_content', None)
-            if reasoning_content:
-                reasoning_parts.append(reasoning_content)
-                if stream_text:
-                    yield StreamEvent('reasoning_delta', {
-                        'content': reasoning_content,
-                        'source': 'api',
-                    })
-            if delta.content:
-                content_parts.append(delta.content)
-                if stream_text:
-                    if planning_mode:
+        stream = self._create_stream(client, kwargs)
+
+        usage = None
+        try:
+            for chunk in stream:
+                chunk_usage = getattr(chunk, 'usage', None)
+                if chunk_usage is not None:
+                    usage = chunk_usage
+                # include_usage 的收尾 chunk 没有 choices，直接取会 IndexError
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta.tool_calls:
+                    for tool_call in delta.tool_calls:
+                        entry = tool_calls_map.setdefault(tool_call.index, _AccumulatedToolCall())
+                        if tool_call.id:
+                            entry.id = tool_call.id
+                        if tool_call.function.name:
+                            entry.name = tool_call.function.name
+                        if tool_call.function.arguments:
+                            entry.arguments += tool_call.function.arguments
+                reasoning_content = getattr(delta, 'reasoning_content', None)
+                if reasoning_content:
+                    reasoning_parts.append(reasoning_content)
+                    if stream_text:
                         yield StreamEvent('reasoning_delta', {
-                            'content': delta.content,
-                            'source': 'planning',
+                            'content': reasoning_content,
+                            'source': 'api',
                         })
-                    elif not tool_calls_map:
-                        yield StreamEvent('delta', {'content': delta.content})
+                if delta.content:
+                    content_parts.append(delta.content)
+                    if stream_text:
+                        if planning_mode:
+                            yield StreamEvent('reasoning_delta', {
+                                'content': delta.content,
+                                'source': 'planning',
+                            })
+                        elif not tool_calls_map:
+                            yield StreamEvent('delta', {'content': delta.content})
+        except Exception:
+            _record_llm_usage(
+                self.user, None, self.model, self.provider,
+                status='failed', reason='stream_error',
+            )
+            raise
+
+        _record_llm_usage(self.user, usage, self.model, self.provider)
 
         yield _StreamRoundResult(
             content_parts=content_parts,

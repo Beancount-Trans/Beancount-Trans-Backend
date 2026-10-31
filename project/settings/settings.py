@@ -13,6 +13,8 @@ import datetime
 import os
 import sys
 from pathlib import Path
+
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # 加载 .env 文件（如果存在）
@@ -109,6 +111,7 @@ INSTALLED_APPS = [  # 项目中使用的 Django 应用程序
     'project.apps.translate',
     'project.apps.assistant',
     'project.apps.mcp',
+    'project.apps.usage',
 ]
 
 # 根据 DEBUG 模式决定是否包含开发专用应用
@@ -577,6 +580,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'project.apps.reconciliation.tasks.generate_due_recurring_tasks',
         'schedule': datetime.timedelta(hours=1),  # 每小时执行一次
     },
+    'snapshot_usage': {
+        'task': 'project.apps.usage.tasks.snapshot_usage_task',
+        'schedule': crontab(hour=0, minute=10),  # 每日采集存储类用量快照
+    },
 }
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
@@ -670,3 +677,7 @@ ENTRY_REVIEW_DEDUP_LLM_TIMEOUT = float(os.environ.get('ENTRY_REVIEW_DEDUP_LLM_TI
 
 # Copilot 记账
 COPILOT_BOOKKEEPING_MAX_ENTRIES = int(os.environ.get('COPILOT_BOOKKEEPING_MAX_ENTRIES', '10'))
+
+# 用量计量（Core 侧只记录事实，额度与计费在 Cloud）
+USAGE_METERING_ENABLED = env_to_bool('USAGE_METERING_ENABLED', True)
+USAGE_EVENT_RETENTION_DAYS = int(os.environ.get('USAGE_EVENT_RETENTION_DAYS', '400'))
