@@ -8,6 +8,7 @@ from project.apps.translate.views import views
 urlpatterns = [
     # path('trans', views.BillAnalyzeView.as_view(), name='trans'),
     path('trans', views.SingleBillAnalyzeView.as_view(), name='trans'),
+    path('bill-support', views.BillSupportStatusView.as_view(), name='bill_support'),
     path('multi', views.MultiBillAnalyzeView.as_view(), name='multi'),
     path('upload-parse', views.UploadParseReviewView.as_view(), name='upload_parse'),
     path('write-collect', views.WriteCollectView.as_view(), name='write_collect'),

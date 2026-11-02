@@ -24,6 +24,7 @@ from project.apps.translate.serializers import AnalyzeSerializer, FormatConfigSe
 from project.apps.translate.utils import FormatData
 from project.apps.translate.tasks import parse_single_file_task
 from project.apps.translate.services.analyze_service import AnalyzeService
+from project.apps.translate.services.bill_support import build_bill_support_snapshot
 from project.apps.translate.services.parse.transaction_parser import single_parse_transaction
 from project.apps.translate.services.parse.installment_expander import (
     expand_parsed_entry,
@@ -1900,3 +1901,13 @@ class EntryReviewReparseAllView(EntryReviewViewSet):
                 {'error': f'重新解析失败: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class BillSupportStatusView(APIView):
+    """各账单类型解析可用性（最近成功解析时间与账单最新交易日期）"""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'bills': build_bill_support_snapshot()}, status=status.HTTP_200_OK)

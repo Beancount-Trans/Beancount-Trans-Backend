@@ -6,6 +6,10 @@ from project.apps.translate.views.CMB_Credit import *
 from project.apps.translate.views.ICBC_Debit import *
 from project.apps.translate.views.CCB_Debit import *
 from project.apps.translate.services.pipeline import BillParsingPipeline
+from project.apps.translate.services.bill_support import (
+    extract_latest_bill_date,
+    record_parse_success,
+)
 from project.apps.translate.services.steps import (
     ConvertToCSVStep,
     InitializeBillStep,
@@ -61,5 +65,10 @@ class AnalyzeService:
 
         # 执行管道
         result_context = pipeline.process(context)
+        if result_context.get('status') != 'error' and result_context.get('formatted_data'):
+            record_parse_success(
+                result_context.get('bill_type'),
+                extract_latest_bill_date(result_context),
+            )
 
         return result_context

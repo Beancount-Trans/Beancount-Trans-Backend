@@ -109,6 +109,22 @@ class FormatConfig(models.Model):
         )[0]  # 始终返回配置实例
 
 
+class BillParseStat(models.Model):
+    """按账单类型汇总的真实解析成功记录（仅聚合信息，不关联用户/文件）。"""
+
+    bill_type = models.CharField(max_length=32, unique=True)
+    last_success_at = models.DateTimeField()
+    latest_bill_date = models.DateField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '账单解析可用性'
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f'{self.bill_type} @ {self.last_success_at:%Y-%m-%d %H:%M}'
+
+
 class ParseFile(models.Model):
     file = models.OneToOneField(
         File,
