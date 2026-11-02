@@ -27,9 +27,10 @@ class Step(ABC):
         """
         pass
 
-    def _error(self, context: Dict, message: str) -> Dict:
+    def _error(self, context: Dict, message: str, code: str = 'PARSE_FAILED') -> Dict:
         """统一错误处理"""
         context.setdefault('errors', []).append(f"{self.__class__.__name__}: {message}")
+        context['error_code'] = code
         context['status'] = 'error'
         logger.error(message)
         return context

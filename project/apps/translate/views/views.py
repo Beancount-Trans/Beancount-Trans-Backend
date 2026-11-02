@@ -41,6 +41,17 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def _friendly_parse_error(raw) -> str:
+    """去掉管道步骤前缀，返回可直接展示给用户的解析错误。"""
+    text = str(raw)
+    head, sep, tail = text.partition(': ')
+    if sep and head.endswith('Step'):
+        text = tail
+    if text.startswith('文件转换失败: '):
+        text = text[len('文件转换失败: '):]
+    return text or '解析失败'
+
+
 def _apply_parse_engine(config, parse_engine=None):
     """解析首页固定使用本地 BERT，个人配置中的解析引擎不参与。
 
@@ -161,6 +172,18 @@ class SingleBillAnalyzeView(APIView):
         results = []
         try:
             context = service.analyze_single_file(uploaded_file, serializer.validated_data)
+            if context.get('status') == 'error':
+                code = context.get('error_code') or 'PARSE_FAILED'
+                raw_error = (context.get('errors') or ['解析失败'])[-1]
+                http_status = (
+                    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+                    if code == 'UNSUPPORTED_BILL'
+                    else status.HTTP_400_BAD_REQUEST
+                )
+                return Response(
+                    {'error': _friendly_parse_error(raw_error), 'error_code': code},
+                    status=http_status,
+                )
             formatted_data_list = context["formatted_data"]
             for formatted_data in formatted_data_list:
                 if isinstance(formatted_data, dict):
@@ -194,7 +217,12 @@ class SingleBillAnalyzeView(APIView):
             response_data = {
             "results": results,
             "summary": {"count": len(results)},
-            "status": "success"
+            "status": "success",
+            "diagnostics": {
+                "total_rows": len(context.get("initialized_bill") or []),
+                "prefiltered_rows": len(context.get("prefilter_bill") or []),
+                "filtered_rows": len(context.get("filtered_data") or []),
+            },
             }
             return Response(response_data, status=status.HTTP_200_OK)
         except DecryptionError as e:

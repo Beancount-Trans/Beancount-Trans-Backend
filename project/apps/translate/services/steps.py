@@ -69,8 +69,11 @@ class ConvertToCSVStep(Step):
             context['csv_file_object'] = csv_file_object
             return context
 
-        except (DecryptionError, UnsupportedFileTypeError) as e:
-            return self._error(context, f"文件转换失败: {str(e)}")
+        except DecryptionError as e:
+            code = 'DECRYPTION_REQUIRED' if '请提供解密密码' in str(e) else 'DECRYPTION_FAILED'
+            return self._error(context, f"文件转换失败: {str(e)}", code=code)
+        except UnsupportedFileTypeError as e:
+            return self._error(context, f"文件转换失败: {str(e)}", code='UNSUPPORTED_BILL')
         except Exception as e:
             return self._error(context, f"CSV转换步骤异常: {str(e)}")
 
@@ -105,7 +108,7 @@ class InitializeBillStep(Step):
             return context
 
         except ValueError as e:  # 无匹配策略
-            return self._error(context, f"不支持的账单类型: {str(e)}")
+            return self._error(context, f"不支持的账单类型: {str(e)}", code='UNSUPPORTED_BILL')
         except Exception as e:  # 初始化异常
             return self._error(context, f"账单初始化异常: {str(e)}")
 
