@@ -1,5 +1,16 @@
 # Changelog
 
+## [6.2.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.1.0...6.2.0) (2026-11-02)
+
+### Features
+
+* **parse:** 默认使用本地 BERT 并将平台 LLM 改为解析首页可选项 ([b7241c3](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/b7241c377826ca38ae45b3d29d2b01e17d65baa9))
+* **trans:** 新增账单解析可用性统计 ([414c1e2](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/414c1e286f8f61f762e748de64b331dfa9a901f7))
+
+### Bug Fixes
+
+* **parse:** 解析失败时返回可分类的错误码与筛选计数 ([56914e3](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/56914e3d1e11f1d99124d7df58a277ec0af6c4a3))
+
 ## [6.1.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.0.3...6.1.0) (2026-10-31)
 
 ### Features
