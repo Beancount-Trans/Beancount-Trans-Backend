@@ -36,7 +36,7 @@ def _platform_llm() -> Optional[ParseLlmConfig]:
 
 def resolve_parse_llm(config) -> Optional[ParseLlmConfig]:
     """按解析引擎返回可用的 LLM 配置；BERT / 单规则返回 None。"""
-    engine = _strip(getattr(config, 'ai_model', None)) or 'Platform'
+    engine = _strip(getattr(config, 'ai_model', None)) or 'BERT'
     if engine == 'Platform':
         return _platform_llm()
     if engine == 'DeepSeek':

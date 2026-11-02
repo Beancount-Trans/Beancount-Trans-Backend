@@ -14,6 +14,10 @@ class AnalyzeSerializer(serializers.Serializer):
     csrfmiddlewaretoken = serializers.CharField(required=False, allow_blank=False)
     # 加密类型：auto（按扩展名自动识别）、pdf_password、zip_password、none
     encryption_type = serializers.CharField(required=False, allow_blank=True, default='auto')
+    # 解析首页可选的解析引擎；不传时按用户配置（默认 BERT）
+    parse_engine = serializers.ChoiceField(
+        choices=['BERT', 'Platform'], required=False, allow_blank=True
+    )
 
 
 class FormatConfigSerializer(serializers.ModelSerializer):
@@ -32,14 +36,17 @@ class FormatConfigSerializer(serializers.ModelSerializer):
         return value
 
     def validate_ai_model(self, value):
-        """归一化解析引擎；spaCy 已移除，空值使用平台 LLM。"""
+        """归一化解析引擎；spaCy 已移除，空值与平台 LLM 归一为本地 BERT。"""
         if not value:
-            return 'Platform'
+            return 'BERT'
         if value.lower() == 'spacy':
             return 'BERT'
         if value.lower() == 'bert':
             return 'BERT'
-        if value not in {'Platform', 'DeepSeek', 'BERT', 'None'}:
+        # 平台 LLM 仅作为解析首页的按次参数，不写入用户配置
+        if value.lower() == 'platform':
+            return 'BERT'
+        if value not in {'DeepSeek', 'None'}:
             raise serializers.ValidationError('不支持的解析引擎')
         return value
 

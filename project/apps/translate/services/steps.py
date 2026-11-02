@@ -157,7 +157,7 @@ class ParseStep(Step):
             )
             logger.info(
                 "解析引擎: %s, LLM 来源: %s",
-                getattr(config, 'ai_model', None) or 'Platform',
+                getattr(config, 'ai_model', None) or 'BERT',
                 llm.source if llm else 'none',
             )
 
@@ -280,6 +280,8 @@ class CacheStep(Step):
             cache_data = {
                 "parsed_entry": parsed_for_cache,
                 "original_row": original_row,
+                # 重解析沿用首页本次选择的引擎
+                "parse_engine": getattr(context['config'], 'ai_model', None) or 'BERT',
             }
             # 如果写入标志为False,则写入缓存
             if not args.get('write', True):

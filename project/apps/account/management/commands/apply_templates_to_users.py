@@ -264,7 +264,7 @@ class Command(BaseCommand):
                     commission_template='Expenses:Finance:Commission',
                     reconciliation_fallback_account='Equity:Adjustments',
                     currency='CNY',
-                    ai_model='Platform'
+                    ai_model='BERT'
                 )
                 result['configs'] = 1
 

@@ -661,7 +661,7 @@ PHONENUMBER_DB_FORMAT = 'E164'
 ASSISTANT_DEEPSEEK_API_KEY = os.environ.get('ASSISTANT_DEEPSEEK_API_KEY', '')
 ASSISTANT_BASE_URL = os.environ.get('ASSISTANT_BASE_URL', 'https://api.deepseek.com')
 ASSISTANT_MODEL = os.environ.get('ASSISTANT_MODEL', 'deepseek-v4-flash')
-# 账单解析：平台 LLM 单次调用超时（秒）；失败时回退本地 BERT
+# 账单解析：勾选平台 LLM 后单次调用超时（秒）；失败时回退本地 BERT
 PARSE_LLM_TIMEOUT = float(os.environ.get('PARSE_LLM_TIMEOUT', '15'))
 ASSISTANT_MAX_BQL_ROWS = int(os.environ.get('ASSISTANT_MAX_BQL_ROWS', '100'))
 ASSISTANT_MAX_BQL_RUNS = int(os.environ.get('ASSISTANT_MAX_BQL_RUNS', '5'))

@@ -151,7 +151,7 @@ def build_similarity_model(
     llm: Optional['ParseLlmConfig'],
 ) -> Optional[SimilarityModel]:
     """按解析引擎构建相似度模型；LLM 不可用时回退本地 BERT。"""
-    normalized = (engine or 'Platform').strip()
+    normalized = (engine or 'BERT').strip()
     if normalized == 'None':
         return None
     if normalized in ('Platform', 'DeepSeek'):

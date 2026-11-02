@@ -33,7 +33,7 @@ class FormatConfig(models.Model):
             )
         ]
     )
-    ai_model = models.CharField(max_length=16, default='Platform', null=False, help_text="AI模型")
+    ai_model = models.CharField(max_length=16, default='BERT', null=False, help_text="AI模型")
     deepseek_apikey = models.CharField(max_length=128, null=True, blank=True, help_text="DeepSeek API密钥")
     assistant_base_url = models.CharField(
         max_length=256, null=True, blank=True, help_text="账本助手 API 接口地址"
@@ -103,7 +103,7 @@ class FormatConfig(models.Model):
                 'commission_template': 'Expenses:Finance:Commission',
                 'reconciliation_fallback_account': 'Equity:Adjustments',
                 'currency': 'CNY',
-                'ai_model': 'Platform',
+                'ai_model': 'BERT',
                 'parsing_mode_preference': 'review'
             }
         )[0]  # 始终返回配置实例

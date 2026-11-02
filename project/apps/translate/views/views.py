@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.shortcuts import render
 from django.contrib.auth import get_user_model
 from project.utils.exceptions import UnsupportedFileTypeError, DecryptionError
-from project.utils.token import get_token_user_id, has_valid_token
+from project.utils.token import get_token_user_id
 from project.utils.tools import get_user_config
 from project.apps.common.permissions import IsOwnerOrAdminReadWriteOnly, AnonymousReadOnlyPermission
 from rest_framework import status
@@ -41,10 +41,13 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-def _apply_anonymous_engine(config, request):
-    """未登录用户不能选择解析引擎，固定使用平台 LLM。"""
-    if not has_valid_token(request):
-        config.ai_model = 'Platform'
+def _apply_parse_engine(config, parse_engine=None):
+    """解析首页固定使用本地 BERT，个人配置中的解析引擎不参与。
+
+    仅请求参数可按次切换到平台 LLM；未登录用户同样适用。
+    """
+    engine = (parse_engine or '').strip()
+    config.ai_model = 'Platform' if engine == 'Platform' else 'BERT'
     return config
 
 
@@ -65,8 +68,9 @@ class BillAnalyzeView(APIView):
         serializer.is_valid(raise_exception=True)
 
         owner_id = get_token_user_id(request)
-        config = _apply_anonymous_engine(
-            get_user_config(User.objects.get(id=owner_id)), request
+        config = _apply_parse_engine(
+            get_user_config(User.objects.get(id=owner_id)),
+            serializer.validated_data.get('parse_engine'),
         )
 
         uploaded_file = request.FILES.get('trans', None)
@@ -142,8 +146,9 @@ class SingleBillAnalyzeView(APIView):
         # 获取用户ID和配置
         # owner_id = get_token_user_id(request)
         user = User.objects.get(id=get_token_user_id(request))
-        config = _apply_anonymous_engine(
-            get_user_config(User.objects.get(id=get_token_user_id(request))), request
+        config = _apply_parse_engine(
+            get_user_config(user),
+            serializer.validated_data.get('parse_engine'),
         )
 
         # 获取上传文件
@@ -236,7 +241,9 @@ class ReparseEntryView(APIView):
         cached_parsed = cache_data.get('parsed_entry') or {}
         owner_id = get_token_user_id(request)
         user = User.objects.get(id=owner_id)
-        config = _apply_anonymous_engine(get_user_config(user), request)
+        config = _apply_parse_engine(
+            get_user_config(user), cache_data.get('parse_engine')
+        )
         expense_selected_key = selected_key
         if mapping_type == 'asset':
             expense_selected_key = cached_parsed.get('selected_expense_key') or None
@@ -263,6 +270,7 @@ class ReparseEntryView(APIView):
             cache.set(cache_key, {
                 "parsed_entry": parsed_entry,
                 "original_row": original_row,
+                "parse_engine": getattr(config, 'ai_model', None) or 'BERT',
             }, timeout=3600)
             response_ai_choose = (
                 cached_parsed.get('selected_expense_key')
