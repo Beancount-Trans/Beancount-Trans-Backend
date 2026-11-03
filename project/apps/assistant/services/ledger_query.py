@@ -104,6 +104,22 @@ class LedgerQueryService:
             self._record_bql(meter, ok=False, error=f'{type(exc).__name__}: {exc}')
             raise ValueError(format_bql_error(exc)) from exc
 
+    def fetch_rows(self, query: str) -> list[tuple]:
+        """执行只读 BQL 并返回原始数据行，不渲染文本、不计量。
+
+        供需要结构化结果的调用方（如日记账）使用；文本渲染只属于 run_bql。
+        """
+        bql = validate_bql(query)
+        conn = self._connect()
+        try:
+            return conn.execute(bql).fetchall()
+        except CompilationError as exc:
+            logger.warning('BQL 编译失败: %s — %s', bql, exc)
+            raise ValueError(format_bql_error(exc)) from exc
+        except Exception as exc:
+            logger.exception('BQL 执行失败: %s', bql)
+            raise ValueError(format_bql_error(exc)) from exc
+
     def _record_bql(self, meter: bool, *, ok: bool, row_count: int = 0, error: str = '') -> None:
         """记录 BQL 用量；内部系统调用（meter=False）不计数。"""
         if not meter:

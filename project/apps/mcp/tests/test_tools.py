@@ -1,5 +1,6 @@
 """MCP Tools 的注册信息与调用行为测试。"""
 import asyncio
+from datetime import date
 from unittest.mock import patch
 
 import pytest
@@ -9,7 +10,7 @@ from .conftest import SAMPLE_BEAN
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
-EXPECTED_TOOLS = {'get_ledger_context', 'run_bql', 'read_ledger_file'}
+EXPECTED_TOOLS = {'get_ledger_context', 'run_bql', 'get_journal', 'read_ledger_file'}
 
 
 def _call(server, name, arguments):
@@ -34,6 +35,8 @@ class TestToolRegistration:
         assert 'query' in tools['run_bql'].input_schema['properties']
         assert 'path' in tools['read_ledger_file'].input_schema['properties']
         assert tools['get_ledger_context'].input_schema['properties'] == {}
+        journal_properties = tools['get_journal'].input_schema['properties']
+        assert set(journal_properties) == {'start', 'end', 'limit', 'offset'}
 
 
 class TestGetLedgerContext:
@@ -141,6 +144,119 @@ class TestRunBql:
         )
         assert 'Expenses:Rent' in result.structured_content['result_text']
         assert 'Expenses:Food' not in result.structured_content['result_text']
+
+
+class TestGetJournal:
+    def _journal(self, server, **arguments):
+        return asyncio.run(server.call_tool('get_journal', arguments)).structured_content
+
+    def test_returns_entries_newest_first(self, mcp_server, ledger_files):
+        payload = self._journal(mcp_server, start='2024-01-01', end='2024-01-31')
+        assert payload['start'] == '2024-01-01'
+        assert payload['end'] == '2024-01-31'
+        assert payload['total'] == 2
+        assert [entry['date'] for entry in payload['entries']] == ['2024-01-10', '2024-01-05']
+        assert payload['offset'] == 0
+        assert payload['has_more'] is False
+        assert payload['next_offset'] is None
+
+    def test_entry_shape_and_descriptions(self, mcp_server, ledger_files, platform_metadata):
+        payload = self._journal(mcp_server, start='2024-01-01', end='2024-01-31')
+        lunch = payload['entries'][1]
+        assert lunch['id']
+        assert lunch['payee'] == '午餐'
+        assert lunch['narration'] == '餐厅'
+        assert lunch['tags'] == []
+        assert [
+            (posting['account'], posting['number'], posting['currency'])
+            for posting in lunch['postings']
+        ] == [
+            ('Expenses:Food', '50.00', 'CNY'),
+            ('Assets:Cash', '-50.00', 'CNY'),
+        ]
+        assert [posting['description'] for posting in lunch['postings']] == ['餐饮', '现金']
+
+    def test_paginates_by_transaction(self, mcp_server, ledger_files):
+        first = self._journal(mcp_server, start='2024-01-01', end='2024-01-31', limit=1)
+        assert first['total'] == 2
+        assert [entry['date'] for entry in first['entries']] == ['2024-01-10']
+        assert first['has_more'] is True
+        assert first['next_offset'] == 1
+
+        second = self._journal(
+            mcp_server, start='2024-01-01', end='2024-01-31', limit=1, offset=1,
+        )
+        assert [entry['date'] for entry in second['entries']] == ['2024-01-05']
+        assert second['has_more'] is False
+        assert second['next_offset'] is None
+
+    def test_filters_by_date_range(self, mcp_server, ledger_files):
+        payload = self._journal(mcp_server, start='2024-01-06', end='2024-01-31')
+        assert [entry['narration'] for entry in payload['entries']] == ['工资']
+
+    def test_returns_tags(self, mcp_server, ledger_files):
+        ledger_files['main'].write_text(
+            '2024-01-05 * "餐厅" "午餐" #Discretionary\n'
+            '  Expenses:Food  50.00 CNY\n'
+            '  Assets:Cash  -50.00 CNY\n',
+            encoding='utf-8',
+        )
+        payload = self._journal(mcp_server, start='2024-01-05', end='2024-01-05')
+        assert payload['entries'][0]['tags'] == ['Discretionary']
+
+    def test_defaults_to_last_30_days(self, mcp_server, ledger_files):
+        with patch(
+            'project.apps.assistant.services.reference_date.get_reference_date',
+            return_value=date(2024, 1, 31),
+        ):
+            payload = self._journal(mcp_server)
+        assert payload['start'] == '2024-01-02'
+        assert payload['end'] == '2024-01-31'
+
+    def test_isolated_between_users(
+        self, mcp_server, other_assets, other_user, settings, monkeypatch,
+    ):
+        monkeypatch.setattr(settings, 'MCP_DEV_USERNAME', other_user.username)
+        payload = self._journal(mcp_server, start='2024-03-01', end='2024-03-31')
+        assert payload['entries'][0]['narration'] == '房租'
+        assert payload['entries'][0]['postings'][0]['account'] == 'Expenses:Rent'
+
+    def test_records_usage_after_success(self, mcp_server, ledger_files):
+        with patch(
+            'project.apps.mcp.tools.touch_current_personal_access_token'
+        ) as touch, patch(
+            'project.apps.assistant.services.journal_query.record_bql'
+        ) as record:
+            self._journal(mcp_server, start='2024-01-01', end='2024-01-31')
+
+        touch.assert_called_once_with()
+        record.assert_called_once()
+        assert record.call_args.kwargs['source_type'] == 'journal_read'
+        assert record.call_args.kwargs['row_count'] == 4
+
+    @pytest.mark.parametrize(
+        'arguments, match',
+        [
+            ({'start': '2024/01/01', 'end': '2024-01-31'}, 'YYYY-MM-DD'),
+            ({'start': '2024-02-01', 'end': '2024-01-01'}, 'start 不能晚于 end'),
+            ({'start': '2023-01-01', 'end': '2024-12-31'}, '366'),
+            ({'start': '2024-01-01', 'end': '2024-01-31', 'limit': 0}, 'limit'),
+            ({'start': '2024-01-01', 'end': '2024-01-31', 'limit': 501}, 'limit'),
+            ({'start': '2024-01-01', 'end': '2024-01-31', 'offset': -1}, 'offset'),
+        ],
+    )
+    def test_rejects_invalid_arguments(
+        self, mcp_server, ledger_files, arguments, match,
+    ):
+        with pytest.raises(ToolError, match=match):
+            _call(mcp_server, 'get_journal', arguments)
+
+    def test_missing_ledger_reports_tool_error(
+        self, mcp_server, settings, monkeypatch, tmp_path,
+    ):
+        monkeypatch.setattr(settings, 'ASSETS_BASE_PATH', tmp_path / 'nonexistent')
+        with pytest.raises(ToolError, match='账本不可用'):
+            _call(mcp_server, 'get_journal', {'start': '2024-01-01', 'end': '2024-01-31'})
 
 
 class TestReadLedgerFile:

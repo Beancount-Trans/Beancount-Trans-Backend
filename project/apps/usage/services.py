@@ -90,13 +90,20 @@ def record_parse(*, task_id: str, user_id: int | None, status: str, entries: int
     )
 
 
-def record_bql(*, user_id: int | None, ok: bool, row_count: int = 0, error: str = ''):
+def record_bql(
+    *,
+    user_id: int | None,
+    ok: bool,
+    row_count: int = 0,
+    error: str = '',
+    source_type: str = 'assistant_bql',
+):
     """记录一次 BQL 调用尝试（含失败与被拒）。"""
     return record_event(
         event_key=f'bql:{uuid4().hex}',
         dimension=Dimension.BQL,
         quantity=1,
-        source_type='assistant_bql',
+        source_type=source_type,
         owner_type=OwnerType.USER if user_id else OwnerType.PLATFORM,
         owner_id=user_id,
         status='ok' if ok else 'failed',
