@@ -292,8 +292,12 @@ pipeline {
                     updateGitHubStatus('pending', '正在部署...')
 
                     sshagent([env.SSH_CREDENTIALS_ID]) {
+                        // 容器重建后 Docker 会分配新的网络 IP，而前端 nginx 在启动时
+                        // 解析并缓存 upstream（beancount-trans-backend / -mcp），
+                        // 不重载就会继续连旧 IP，导致 /api 与 /mcp 返回 502。
+                        // 重载是优雅的；前端未运行时只告警，不让部署失败。
                         sh """
-                            ssh -o StrictHostKeyChecking=no -p ${env.DEPLOY_PORT} root@${env.DEPLOY_SERVER} "cd /root/Manage && docker compose -f docker-compose-beancount-trans-backend.yaml down && sed -i 's|image:.*beancount-trans-backend.*|image: ${env.REGISTRY}/${env.IMAGE_NAME}:${env.IMAGE_TAG}|' docker-compose-beancount-trans-backend.yaml && docker compose -f docker-compose-beancount-trans-backend.yaml up -d"
+                            ssh -o StrictHostKeyChecking=no -p ${env.DEPLOY_PORT} root@${env.DEPLOY_SERVER} "cd /root/Manage && docker compose -f docker-compose-beancount-trans-backend.yaml down && sed -i 's|image:.*beancount-trans-backend.*|image: ${env.REGISTRY}/${env.IMAGE_NAME}:${env.IMAGE_TAG}|' docker-compose-beancount-trans-backend.yaml && docker compose -f docker-compose-beancount-trans-backend.yaml up -d && (docker exec beancount-trans-frontend nginx -s reload || echo 'WARN: 前端 nginx 重载失败，/api 与 /mcp 可能继续 502，请手动重载')"
                         """
                     }
                     echo "✅ 部署完成"
