@@ -32,7 +32,7 @@ class AccountAdmin(admin.ModelAdmin):
             return queryset
 
     list_display = [
-        'account', 'owner', 'enable', 'account_type',
+        'account', 'owner', 'enable', 'currency', 'account_type',
         'has_children_display', 'mapping_count_display'
     ]
     list_filter = [
@@ -45,7 +45,7 @@ class AccountAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('基本信息', {
-            'fields': ('account', 'owner', 'enable', 'parent', 'description')
+            'fields': ('account', 'owner', 'enable', 'currency', 'parent', 'description')
         }),
         ('统计信息', {
             'fields': ('has_children_display', 'mapping_count_display'),

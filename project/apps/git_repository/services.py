@@ -414,15 +414,77 @@ class PlatformGitService:
                 'error': error_msg
             }
 
-    def push_ledger(self, user: User, paths: Optional[list] = None) -> Dict[str, Any]:
+    DEFAULT_LEDGER_COMMIT_MESSAGE = 'chore(ledger): 提交平台解析条目到月度账本'
+
+    @staticmethod
+    def _rev_short() -> str:
+        return subprocess.run(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    def _push_pending_repo(self, env, branch: str) -> Dict[str, Any]:
+        """在已切换到仓库目录的前提下，推送本地未推送提交
+
+        - 先 fetch 刷新 origin 引用；
+        - 无未推送提交时返回 skipped；
+        - 有提交时 pull --rebase 后再 push；rebase 失败会 abort，避免仓库停留在中间态。
+        """
+        subprocess.run(
+            ['git', 'fetch', 'origin'],
+            env=env, check=True, capture_output=True, text=True,
+        )
+
+        remote_ref = f'origin/{branch}'
+        has_remote = subprocess.run(
+            ['git', 'rev-parse', '--verify', '--quiet', remote_ref],
+            capture_output=True, text=True,
+        ).returncode == 0
+
+        count_cmd = (
+            ['git', 'rev-list', '--count', f'{remote_ref}..HEAD']
+            if has_remote
+            else ['git', 'rev-list', '--count', 'HEAD']
+        )
+        count_result = subprocess.run(count_cmd, capture_output=True, text=True)
+        ahead = int(count_result.stdout.strip() or 0) if count_result.returncode == 0 else 0
+        if ahead == 0:
+            return {'status': 'skipped', 'message': '没有需要推送的账本变更'}
+
+        if has_remote:
+            try:
+                subprocess.run(
+                    ['git', 'pull', '--rebase', 'origin', branch],
+                    env=env, check=True, capture_output=True, text=True,
+                )
+            except subprocess.CalledProcessError:
+                subprocess.run(
+                    ['git', 'rebase', '--abort'],
+                    capture_output=True, text=True,
+                )
+                raise
+
+        subprocess.run(
+            ['git', 'push', 'origin', branch],
+            env=env, check=True, capture_output=True, text=True,
+        )
+        return {'status': 'success', 'message': '已推送到远程仓库'}
+
+    def push_ledger(
+        self,
+        user: User,
+        paths: Optional[list] = None,
+        commit_message: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """把平台写入的账本内容提交并推送到远程（仅 Git 用户）
 
-        流程：git add → commit → git pull --rebase → git push。
-        无变更时不产生空提交，直接返回 skipped。
+        流程：git add → commit（如有变更）→ fetch → 判断未推送提交 → pull --rebase → push。
+        没有暂存变更但存在本地未推送提交时，也会补推，便于推送失败后重试。
 
         Args:
             user: 用户对象
             paths: 需要 add 的相对路径列表（相对仓库根）；为空时提交全部变更
+            commit_message: 自定义提交信息；为空时使用默认文案
 
         Returns:
             Dict[str, Any]: 含 status（success/skipped）、message、commit、files
@@ -467,31 +529,26 @@ class PlatformGitService:
                 ['git', 'diff', '--cached', '--name-only'],
                 check=True, capture_output=True, text=True,
             ).stdout.strip()
-            if not staged:
-                return {'status': 'skipped', 'message': '没有需要提交的账本变更', 'files': []}
 
-            subprocess.run(
-                ['git', 'commit', '-m', 'chore(ledger): 提交平台解析条目到月度账本'],
-                check=True, capture_output=True, text=True,
-            )
-            commit_hash = subprocess.run(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                check=True, capture_output=True, text=True,
-            ).stdout.strip()
+            if staged:
+                subprocess.run(
+                    ['git', 'commit', '-m', commit_message or self.DEFAULT_LEDGER_COMMIT_MESSAGE],
+                    check=True, capture_output=True, text=True,
+                )
 
-            subprocess.run(
-                ['git', 'pull', '--rebase', 'origin', branch],
-                env=env, check=True, capture_output=True, text=True,
-            )
-            subprocess.run(
-                ['git', 'push', 'origin', branch],
-                env=env, check=True, capture_output=True, text=True,
-            )
+            push_result = self._push_pending_repo(env, branch)
+            if push_result['status'] == 'skipped':
+                return {
+                    'status': 'skipped',
+                    'message': '没有需要提交或推送的账本变更',
+                    'files': [],
+                }
 
+            commit_hash = self._rev_short()
             logger.info(f"Pushed ledger for user {user.username}: {commit_hash}")
             return {
                 'status': 'success',
-                'message': '已提交并推送到远程仓库',
+                'message': '已提交并推送到远程仓库' if staged else '已推送到远程仓库',
                 'commit': commit_hash,
                 'files': staged.splitlines(),
             }
@@ -504,6 +561,61 @@ class PlatformGitService:
             raise
         except Exception as e:
             logger.error(f"Failed to push ledger for user {user.username}: {e}")
+            raise GitServiceException(f"推送失败: {e}")
+        finally:
+            os.chdir(original_cwd)
+            if os.path.exists(ssh_key_file):
+                os.remove(ssh_key_file)
+
+    def push_pending(self, user: User) -> Dict[str, Any]:
+        """只推送本地已有提交，不执行 git add / commit
+
+        用于「提交到账本」在 trans/ 无新条目时补推此前失败的币种改动。
+        """
+        try:
+            git_repo = user.git_repo
+        except GitRepository.DoesNotExist:
+            raise GitServiceException("用户未启用 Git 功能")
+
+        user_assets_path = self.assets_base_path / git_repo.repo_name
+        if not (user_assets_path / '.git').exists():
+            raise GitServiceException("本地仓库尚未初始化，请先执行「立即同步」")
+
+        ssh_key_file = self._prepare_ssh_key(git_repo)
+        original_cwd = os.getcwd()
+
+        try:
+            env = os.environ.copy()
+            env['GIT_SSH_COMMAND'] = f'ssh -i {ssh_key_file} -o StrictHostKeyChecking=no'
+
+            os.chdir(user_assets_path)
+            branch = (git_repo.default_branch or 'main').strip() or 'main'
+
+            push_result = self._push_pending_repo(env, branch)
+            if push_result['status'] == 'skipped':
+                return {
+                    'status': 'skipped',
+                    'message': '没有需要推送的账本变更',
+                    'files': [],
+                }
+
+            commit_hash = self._rev_short()
+            logger.info(f"Pushed pending ledger for user {user.username}: {commit_hash}")
+            return {
+                'status': 'success',
+                'message': '已推送到远程仓库',
+                'commit': commit_hash,
+                'files': [],
+            }
+
+        except subprocess.CalledProcessError as e:
+            err = (e.stderr or e.stdout or '').strip() or str(e)
+            logger.error(f"Failed to push pending ledger for user {user.username}: {err[:800]}")
+            raise GitServiceException(f"推送失败: {err[:800]}")
+        except GitServiceException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to push pending ledger for user {user.username}: {e}")
             raise GitServiceException(f"推送失败: {e}")
         finally:
             os.chdir(original_cwd)

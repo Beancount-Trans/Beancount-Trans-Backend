@@ -3,6 +3,12 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from project.apps.account.currency import (
+    find_currency_conflicts,
+    is_currency_account,
+    normalize_currency_codes,
+    validate_currency_codes,
+)
 from project.models import BaseModel
 
 
@@ -30,6 +36,13 @@ class Account(BaseModel):
     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='children', help_text="父账户", verbose_name="父账户")
     owner = models.ForeignKey(User, related_name='accounts', on_delete=models.CASCADE, db_index=True, help_text="属主", verbose_name="属主")
     enable = models.BooleanField(default=True,verbose_name="是否启用",help_text="启用状态")
+    currency = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name="币种",
+        help_text="逗号分隔的货币代码，如 CNY,COIN；仅资产/负债账户可设置，留空表示不限制",
+    )
     
     # 对账周期配置（受控自然语言循环规则，如 every month on the last）
     reconciliation_rule = models.CharField(
@@ -60,6 +73,31 @@ class Account(BaseModel):
         if root not in valid_roots:
             raise ValidationError(f"根账户必须是以下之一: {', '.join(valid_roots)}")
 
+        # 验证币种格式与账户类型限制
+        self.currency = validate_currency_codes(self.currency)
+        if self.currency and not is_currency_account(self.account):
+            raise ValidationError("仅资产与负债账户支持设置币种")
+
+        # 币种变更/新建时校验账本历史交易，冲突则阻断保存
+        needs_conflict_scan = bool(self.currency) and self.pk is None
+        if self.pk:
+            old_currency = Account.objects.filter(pk=self.pk).values_list('currency', flat=True).first()
+            if old_currency != self.currency:
+                needs_conflict_scan = True
+        if needs_conflict_scan:
+            if self.owner_id:
+                conflicts = find_currency_conflicts(
+                    self.owner, self.account, self.currency.split(',')
+                )
+                if conflicts:
+                    raise ValidationError(
+                        f"账本中该账户已使用币种 {','.join(conflicts)}，"
+                        f"无法限制为 {self.currency}；请先在账本中处理这些交易"
+                    )
+                self._currency_validated = True
+        else:
+            self._currency_validated = True
+
         # 验证对账周期规则（受控自然语言 DSL）
         if self.reconciliation_rule:
             from project.apps.reconciliation.services.recurrence import (
@@ -73,12 +111,18 @@ class Account(BaseModel):
 
     def save(self, *args, **kwargs):
         """保存账户时自动创建父账户，并同步映射状态"""
+        # 规范化并校验币种格式/账户类型
+        self.currency = validate_currency_codes(self.currency)
+        if self.currency and not is_currency_account(self.account):
+            raise ValidationError("仅资产与负债账户支持设置币种")
+
         # 检查是否是新创建的账户（在 save 之前检查）
         is_new_account = self.pk is None
         
         # 检查enable字段是否发生变化
         enable_changed = False
         account_name_changed = False
+        currency_changed = False
         old_account_name = None
 
         if self.pk:
@@ -86,10 +130,27 @@ class Account(BaseModel):
                 old_instance = Account.objects.get(pk=self.pk)
                 enable_changed = old_instance.enable != self.enable
                 account_name_changed = old_instance.account != self.account
+                currency_changed = old_instance.currency != self.currency
                 if account_name_changed:
                     old_account_name = old_instance.account
             except Account.DoesNotExist:
                 pass
+
+        # 最后防线：serializer / clean 未校验时，补做一次账本冲突扫描
+        needs_conflict_scan = (is_new_account and bool(self.currency)) or currency_changed
+        if needs_conflict_scan and not getattr(self, '_currency_validated', False):
+            if self.owner_id:
+                conflicts = find_currency_conflicts(
+                    self.owner, self.account, self.currency.split(',')
+                )
+                if conflicts:
+                    raise ValidationError(
+                        f"账本中该账户已使用币种 {','.join(conflicts)}，"
+                        f"无法限制为 {self.currency}；请先在账本中处理这些交易"
+                    )
+                self._currency_validated = True
+        else:
+            self._currency_validated = True
 
         # 始终根据新的账户路径计算并设置父账户
         if ':' in self.account:
@@ -124,6 +185,10 @@ class Account(BaseModel):
             # 启用/关闭状态同步到账本（以 note 记录，可反复切换）
             if not getattr(self, '_skip_ledger_sync', False):
                 self._sync_ledger_state()
+
+        # 币种变更同步账本 open（新建账户由 _sync_ledger_open 处理）
+        if currency_changed and not getattr(self, '_skip_ledger_sync', False):
+            self._sync_ledger_currency()
         
         # 如果是新创建的账户，且启用且配置了对账周期，创建待办任务
         if is_new_account and self.enable:
@@ -227,6 +292,63 @@ class Account(BaseModel):
             logger = logging.getLogger(__name__)
             logger.error(f"同步映射状态失败: {str(e)}")
 
+    def _apply_ledger_sync_result(self, result, log_message, commit_message):
+        """记录账本同步结果，并在必要时触发 Git 提交推送"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if result.text:
+            logger.info(log_message)
+        self._apply_ledger_git_sync(result, commit_message)
+
+    def _apply_ledger_git_sync(self, result, commit_message):
+        """把 trans/ 之外的账本改动提交并推送到 Git
+
+        trans/ 被仓库 .gitignore 忽略，由现有备份机制保护，不在此提交。
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        paths = list(dict.fromkeys(
+            path for path in result.paths
+            if path and not path.startswith('trans/')
+        ))
+        if not paths:
+            return
+
+        try:
+            git_repo = self.owner.git_repo
+        except Exception:
+            # 非 Git 用户
+            return
+
+        try:
+            from project.apps.git_repository.services import PlatformGitService
+
+            PlatformGitService().push_ledger(
+                self.owner, paths=paths, commit_message=commit_message
+            )
+            self.ledger_sync_warning = None
+            logger.info(f"账户 {self.account} 的账本改动已提交并推送")
+            try:
+                git_repo.sync_status = 'success'
+                git_repo.sync_error = ''
+                git_repo.save()
+            except Exception:
+                pass
+        except Exception as e:
+            message = f"账本已更新，但推送到 Git 失败：{str(e)}"
+            self.ledger_sync_warning = message
+            logger.error(f"账户 {self.account} {message}")
+            try:
+                git_repo.sync_status = 'failed'
+                git_repo.sync_error = message[:1000]
+                git_repo.save()
+            except Exception:
+                pass
+
     def _sync_ledger_open(self):
         """新账户同步写入账本 open（含占位 note）"""
         import logging
@@ -236,9 +358,12 @@ class Account(BaseModel):
         try:
             from project.apps.account.ledger_sync import sync_open
 
-            written = sync_open(self)
-            if written:
-                logger.info(f"账户 {self.account} 已同步账本创建状态")
+            result = sync_open(self)
+            self._apply_ledger_sync_result(
+                result,
+                f"账户 {self.account} 已同步账本创建状态",
+                f"chore(account): 同步账户 {self.account} 的 open",
+            )
         except Exception as e:
             # 记录错误但不阻止账户保存
             logger.error(f"同步账户 open 到账本失败: {str(e)}")
@@ -252,9 +377,12 @@ class Account(BaseModel):
         try:
             from project.apps.account.ledger_sync import sync_close
 
-            written = sync_close(self)
-            if written:
-                logger.info(f"账户 {self.account} 已同步账本 close")
+            result = sync_close(self)
+            self._apply_ledger_sync_result(
+                result,
+                f"账户 {self.account} 已同步账本 close",
+                f"chore(account): 关闭账户 {self.account}",
+            )
         except Exception as e:
             # 记录错误但不阻止账户操作
             logger.error(f"同步账户 close 到账本失败: {str(e)}")
@@ -273,12 +401,34 @@ class Account(BaseModel):
             )
 
             state_text = STATE_NOTE_ENABLED if self.enable else STATE_NOTE_DISABLED
-            written = sync_state(self, state_text)
-            if written:
-                logger.info(f"账户 {self.account} 已同步状态「{state_text}」到账本")
+            result = sync_state(self, state_text)
+            self._apply_ledger_sync_result(
+                result,
+                f"账户 {self.account} 已同步状态「{state_text}」到账本",
+                f"chore(account): 更新账户 {self.account} 状态",
+            )
         except Exception as e:
             # 记录错误但不阻止账户操作
             logger.error(f"同步账户状态到账本失败: {str(e)}")
+
+    def _sync_ledger_currency(self):
+        """币种变更时就地重写账本 open，并在必要时提交推送"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            from project.apps.account.ledger_sync import sync_currency
+
+            result = sync_currency(self)
+            self._apply_ledger_sync_result(
+                result,
+                f"账户 {self.account} 已同步币种到账本",
+                f"chore(account): 更新账户 {self.account} 币种为 {self.currency or '不限制'}",
+            )
+        except Exception as e:
+            # 记录错误但不阻止账户保存
+            logger.error(f"同步账户币种到账本失败: {str(e)}")
 
     def _create_reconciliation_task_if_needed(self):
         """如果需要，创建对账待办任务

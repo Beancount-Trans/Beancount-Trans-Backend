@@ -1,6 +1,8 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from rest_framework import serializers
 # from django.contrib.auth.models import User
+from project.apps.account.currency import validate_account_currency
 from project.apps.account.models import Account, AccountTemplate, AccountTemplateItem
 
 _DUPLICATE_ACCOUNT_MSG = '该账户路径已存在，请勿重复添加'
@@ -17,7 +19,7 @@ class AccountTreeSerializer(serializers.ModelSerializer):
         model = Account
         fields = [
             'id', 'account', 'parent', 'parent_account',
-            'owner', 'enable', 'account_type', 'mapping_count',
+            'owner', 'enable', 'currency', 'account_type', 'mapping_count',
             'reconciliation_rule',
             'description', 'children', 'created', 'modified'
         ]
@@ -77,16 +79,20 @@ class AccountSerializer(serializers.ModelSerializer):
     account_type = serializers.CharField(source='get_account_type', read_only=True)
     has_children = serializers.BooleanField(read_only=True)
     mapping_count = serializers.SerializerMethodField()
+    ledger_sync_warning = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = [
             'id', 'account', 'parent', 'parent_account',
-            'owner', 'enable', 'account_type', 'has_children', 'mapping_count',
+            'owner', 'enable', 'currency', 'account_type', 'has_children', 'mapping_count',
             'reconciliation_rule',
-            'description', 'created', 'modified'
+            'description', 'ledger_sync_warning', 'created', 'modified'
         ]
-        read_only_fields = ['id', 'created', 'modified', 'owner']
+        read_only_fields = ['id', 'created', 'modified', 'owner', 'ledger_sync_warning']
+
+    def get_ledger_sync_warning(self, obj):
+        return getattr(obj, 'ledger_sync_warning', None)
 
     def validate_reconciliation_rule(self, value):
         """校验对账周期规则（受控自然语言 DSL）"""
@@ -141,6 +147,36 @@ class AccountSerializer(serializers.ModelSerializer):
         except:
             return {'expense': 0, 'assets': 0, 'income': 0, 'total': 0}
 
+    def validate(self, attrs):
+        """校验币种格式、账户类型与账本历史交易冲突"""
+        final_account = attrs.get('account', getattr(self.instance, 'account', ''))
+        raw_currency = attrs.get('currency', getattr(self.instance, 'currency', ''))
+
+        scan_conflicts = bool(raw_currency) and self.instance is None
+        if self.instance is not None:
+            scan_conflicts = (raw_currency or '') != (self.instance.currency or '')
+
+        request = self.context.get('request')
+        user = None
+        if request and getattr(request.user, 'is_authenticated', False):
+            user = request.user
+
+        try:
+            attrs['currency'] = validate_account_currency(
+                final_account,
+                raw_currency,
+                user,
+                scan_conflicts=scan_conflicts,
+            )
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'currency': list(e.messages)})
+
+        if self.instance is not None:
+            # 标记已校验，避免模型 save() 重复扫描账本
+            self.instance._currency_validated = True
+
+        return attrs
+
     def validate_account(self, value):
         """验证账户路径格式"""
         from project.apps.account.models import _is_valid_account_part
@@ -169,12 +205,16 @@ class AccountSerializer(serializers.ModelSerializer):
             return super().create(validated_data)
         except IntegrityError:
             raise serializers.ValidationError({'account': [_DUPLICATE_ACCOUNT_MSG]})
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'currency': list(e.messages)})
 
     def update(self, instance, validated_data):
         try:
             return super().update(instance, validated_data)
         except IntegrityError:
             raise serializers.ValidationError({'account': [_DUPLICATE_ACCOUNT_MSG]})
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({'currency': list(e.messages)})
 
 
 class AccountBatchUpdateSerializer(serializers.Serializer):

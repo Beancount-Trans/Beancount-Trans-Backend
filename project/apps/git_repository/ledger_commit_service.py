@@ -98,13 +98,22 @@ class LedgerCommitService:
 
         buckets = collected['buckets']
         if not buckets:
+            # trans/ 无新条目时，仍尝试补推此前失败的平台提交（如账户币种改动）
+            push_result = None
+            repo_path = BeanFileManager.get_user_assets_path(user)
+            if os.path.isdir(os.path.join(repo_path, '.git')):
+                push_result = PlatformGitService().push_pending(user)
+
             return {
-                'status': 'skipped',
-                'message': 'trans/ 下没有可迁移的条目',
+                'status': (push_result or {}).get('status', 'skipped'),
+                'message': (
+                    (push_result or {}).get('message')
+                    or 'trans/ 下没有可迁移的条目'
+                ),
                 'plans': [],
                 'entries_appended': 0,
                 'files_cleared': 0,
-                'push': None,
+                'push': push_result,
             }
 
         plans = cls._build_plan(buckets)
