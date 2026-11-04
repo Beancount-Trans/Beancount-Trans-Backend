@@ -121,6 +121,9 @@ class Account(BaseModel):
             # 如果账户被启用，且配置了对账周期，创建待办任务
             elif self.enable:
                 self._create_reconciliation_task_if_needed()
+            # 启用/关闭状态同步到账本（以 note 记录，可反复切换）
+            if not getattr(self, '_skip_ledger_sync', False):
+                self._sync_ledger_state()
         
         # 如果是新创建的账户，且启用且配置了对账周期，创建待办任务
         if is_new_account and self.enable:
@@ -129,6 +132,13 @@ class Account(BaseModel):
         # 如果账户名称发生变化，同步更新所有子账户的名称
         if account_name_changed and old_account_name:
             self._update_children_account_names(old_account_name)
+
+        # 新账户同步写入账本 open（自动创建的父账户通过 _skip_ledger_sync 跳过）
+        if is_new_account and not getattr(self, '_skip_ledger_sync', False):
+            self._sync_ledger_open()
+            # 创建时即禁用的账户，补一条关闭状态记录
+            if not self.enable:
+                self._sync_ledger_state()
 
     def _create_parent_account(self, parent_account_path):
         """递归创建父账户"""
@@ -143,20 +153,24 @@ class Account(BaseModel):
                 grandparent_path = ':'.join(parent_account_path.split(':')[:-1])
                 grandparent = self._create_parent_account(grandparent_path)
 
-                # 创建当前父账户
-                parent = Account.objects.create(
+                # 创建当前父账户（父账户不写入账本）
+                parent = Account(
                     account=parent_account_path,
                     owner=self.owner,
                     parent=grandparent,
                     enable=True
                 )
+                parent._skip_ledger_sync = True
+                parent.save()
             else:
-                # 这是根级账户，直接创建
-                parent = Account.objects.create(
+                # 这是根级账户，直接创建（父账户不写入账本）
+                parent = Account(
                     account=parent_account_path,
                     owner=self.owner,
                     enable=True
                 )
+                parent._skip_ledger_sync = True
+                parent.save()
 
             return parent
 
@@ -212,6 +226,59 @@ class Account(BaseModel):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"同步映射状态失败: {str(e)}")
+
+    def _sync_ledger_open(self):
+        """新账户同步写入账本 open（含占位 note）"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            from project.apps.account.ledger_sync import sync_open
+
+            written = sync_open(self)
+            if written:
+                logger.info(f"账户 {self.account} 已同步账本创建状态")
+        except Exception as e:
+            # 记录错误但不阻止账户保存
+            logger.error(f"同步账户 open 到账本失败: {str(e)}")
+
+    def _sync_ledger_close(self):
+        """删除账户时同步写入账本 close"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            from project.apps.account.ledger_sync import sync_close
+
+            written = sync_close(self)
+            if written:
+                logger.info(f"账户 {self.account} 已同步账本 close")
+        except Exception as e:
+            # 记录错误但不阻止账户操作
+            logger.error(f"同步账户 close 到账本失败: {str(e)}")
+
+    def _sync_ledger_state(self):
+        """把启用/关闭状态以 note 形式同步到账本"""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            from project.apps.account.ledger_sync import (
+                STATE_NOTE_DISABLED,
+                STATE_NOTE_ENABLED,
+                sync_state,
+            )
+
+            state_text = STATE_NOTE_ENABLED if self.enable else STATE_NOTE_DISABLED
+            written = sync_state(self, state_text)
+            if written:
+                logger.info(f"账户 {self.account} 已同步状态「{state_text}」到账本")
+        except Exception as e:
+            # 记录错误但不阻止账户操作
+            logger.error(f"同步账户状态到账本失败: {str(e)}")
 
     def _create_reconciliation_task_if_needed(self):
         """如果需要，创建对账待办任务
@@ -370,7 +437,7 @@ class Account(BaseModel):
         # 取消所有相关的待办任务
         self._cancel_pending_tasks()
 
-        # 关闭当前账户（不关闭子账户）
+        # 关闭当前账户（不关闭子账户）；save() 会同步账本状态 note
         self.enable = False
         self.save()
 
@@ -435,7 +502,9 @@ class Account(BaseModel):
             result['mappings_migrated'] = True
             result['migrated_to'] = migrate_to.id
 
-        # 删除账户
+        # 删除账户（先同步账本 close，保留历史）
+        self._sync_ledger_close()
+
         account_id = self.id
         account_name = self.account
         self.delete()

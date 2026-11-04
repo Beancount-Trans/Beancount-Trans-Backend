@@ -143,7 +143,13 @@ class AccountAdmin(admin.ModelAdmin):
 
     def enable_accounts(self, request, queryset):
         """批量启用账户"""
-        updated = queryset.update(enable=True)
+        updated = 0
+        for account in queryset:
+            if account.enable:
+                continue
+            account.enable = True
+            account.save()
+            updated += 1
         self.message_user(
             request,
             f'成功启用了 {updated} 个账户。'
@@ -152,7 +158,13 @@ class AccountAdmin(admin.ModelAdmin):
 
     def disable_accounts(self, request, queryset):
         """批量禁用账户"""
-        updated = queryset.update(enable=False)
+        updated = 0
+        for account in queryset:
+            if not account.enable:
+                continue
+            account.enable = False
+            account.save()
+            updated += 1
         self.message_user(
             request,
             f'成功禁用了 {updated} 个账户。'
