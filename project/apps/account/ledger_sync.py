@@ -23,7 +23,7 @@ from project.utils.file import BeanFileManager
 
 logger = logging.getLogger(__name__)
 
-PLACEHOLDER_NOTE = "平台创建账户，暂无交易"
+PLACEHOLDER_NOTE = "平台创建账户"
 STATE_NOTE_ENABLED = "平台启用账户"
 STATE_NOTE_DISABLED = "平台关闭账户"
 STATE_NOTES = (STATE_NOTE_ENABLED, STATE_NOTE_DISABLED)
