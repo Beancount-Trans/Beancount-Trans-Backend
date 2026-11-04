@@ -3,7 +3,6 @@
 """
 import logging
 from datetime import date
-from decimal import Decimal
 
 from rest_framework import status
 from rest_framework.decorators import action
@@ -30,6 +29,7 @@ from .serializers import (
 from .services import (
     BalanceCalculationService,
     ReconciliationService,
+    AccountCurrencyService,
     RecurringTaskService,
 )
 from .services.recurrence import RecurrenceParseError
@@ -137,28 +137,25 @@ class ScheduledTaskViewSet(ModelViewSet):
             as_of_date=as_of_date
         )
         
-        # 过滤出所有有余额的币种（余额不为0）
-        non_zero_balances = [
-            {
-                'currency': currency,
-                'expected_balance': balance
-            }
-            for currency, balance in balances.items()
-            if balance != Decimal('0.00')
-        ]
-        
+        # 确定可对账币种：账户配置币种优先（含 0 余额），未配置时回退账本非零余额
+        currency_balances = AccountCurrencyService.resolve_reconciliation_currencies(
+            account, balances
+        )
+
+        configured = AccountCurrencyService.get_configured_currencies(account)
+        if configured:
+            extra = set(balances) - set(configured)
+            if extra:
+                logger.warning(
+                    "账户 %s 配置币种 %s，但账本存在额外币种 %s，对账时已忽略",
+                    account.account, configured, sorted(extra),
+                )
+
         # 确定默认币种：优先选择CNY，否则选择第一个币种
         default_currency = None
-        if non_zero_balances:
-            # 查找CNY
-            cny_balance = next(
-                (item for item in non_zero_balances if item['currency'] == 'CNY'),
-                None
-            )
-            if cny_balance:
-                default_currency = 'CNY'
-            else:
-                default_currency = non_zero_balances[0]['currency']
+        if currency_balances:
+            codes = [item['currency'] for item in currency_balances]
+            default_currency = 'CNY' if 'CNY' in codes else codes[0]
         
         # 获取上一次对账日期（最近一次完成的对账任务的 as_of_date）
         from django.contrib.contenttypes.models import ContentType
@@ -192,7 +189,7 @@ class ScheduledTaskViewSet(ModelViewSet):
             )
 
         data = {
-            'balances': non_zero_balances,
+            'balances': currency_balances,
             'account_name': account.account,
             'as_of_date': date.today(),
             'default_currency': default_currency,

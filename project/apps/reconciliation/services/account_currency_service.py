@@ -6,7 +6,8 @@
 import logging
 import os
 import re
-from typing import List, Optional
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 from project.utils.file import BeanFileManager
 
@@ -145,4 +146,32 @@ class AccountCurrencyService:
         
         # 否则返回第一个货币
         return currencies[0]
+
+    @staticmethod
+    def get_configured_currencies(account) -> List[str]:
+        """账户在平台配置的币种列表（DB），空列表表示未限制"""
+        raw = getattr(account, 'currency', '') or ''
+        return [code.strip() for code in raw.split(',') if code.strip()]
+
+    @staticmethod
+    def resolve_reconciliation_currencies(account, balances) -> List[Dict[str, Any]]:
+        """确定对账币种候选及预期余额
+
+        - 账户配置了币种：以账户配置为准（含 0 余额币种）
+        - 账户未配置币种：回退账本中余额非零的币种
+        """
+        configured = AccountCurrencyService.get_configured_currencies(account)
+        if configured:
+            return [
+                {
+                    'currency': code,
+                    'expected_balance': balances.get(code, Decimal('0.00')),
+                }
+                for code in configured
+            ]
+        return [
+            {'currency': currency, 'expected_balance': balance}
+            for currency, balance in balances.items()
+            if balance != Decimal('0.00')
+        ]
 

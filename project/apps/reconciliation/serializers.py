@@ -270,7 +270,7 @@ class ReconciliationStartSerializer(serializers.Serializer):
     """开始对账响应序列化器"""
     balances = CurrencyBalanceSerializer(
         many=True,
-        help_text="所有有余额的币种列表（仅返回余额不为0的币种）"
+        help_text="账户可对账币种及预期余额（账户配置币种优先，未配置时返回余额非零的账本币种）"
     )
     account_name = serializers.CharField(
         max_length=128,
@@ -319,8 +319,8 @@ class ReconciliationExecuteSerializer(serializers.Serializer):
     )
     currency = serializers.CharField(
         max_length=10,
-        default='CNY',
-        help_text="币种"
+        required=False,
+        help_text="币种（缺省时按账户配置币种优先、账本余额兜底推导）"
     )
     transaction_items = TransactionItemSerializer(
         many=True, 
@@ -335,7 +335,7 @@ class ReconciliationExecuteSerializer(serializers.Serializer):
     def validate(self, data):
         """验证对账数据"""
         from .validators import ReconciliationValidator
-        from .services import BalanceCalculationService
+        from .services import AccountCurrencyService, BalanceCalculationService
         from .models import ScheduledTask
         
         # 获取任务和账户信息
@@ -376,7 +376,20 @@ class ReconciliationExecuteSerializer(serializers.Serializer):
             account.account,
             as_of_date=as_of_date
         )
-        currency = data.get('currency', 'CNY')
+
+        # 币种优先取账户配置，未配置时回退账本余额推导
+        configured = AccountCurrencyService.get_configured_currencies(account)
+        currency = data.get('currency')
+        if not currency:
+            candidates = configured or list(balances.keys())
+            currency = 'CNY' if 'CNY' in candidates else (candidates[0] if candidates else 'CNY')
+            data['currency'] = currency
+
+        if configured and currency not in configured:
+            raise serializers.ValidationError(
+                {'currency': f'币种 {currency} 不在账户可用币种 {",".join(configured)} 中'}
+            )
+
         expected_balance = balances.get(currency, Decimal('0.00'))
         
         # 验证对账数据

@@ -3,6 +3,7 @@
 """
 import pytest
 from datetime import date, timedelta
+from decimal import Decimal
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -840,4 +841,117 @@ class TestReconciliationDuplicateCheckAPI:
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert '2026-01-20' in str(response.data) or '重复对账' in str(response.data)
+
+
+@pytest.mark.django_db
+class TestReconciliationAccountCurrencyAPI:
+    """测试对账币种优先取账户配置、账户未配置时回退账本"""
+
+    def _set_currency(self, account, currency):
+        """直接更新币种，避免触发账本同步写文件"""
+        Account.objects.filter(pk=account.pk).update(currency=currency)
+        account.refresh_from_db()
+
+    def test_start_uses_account_currency_without_ledger_balance(
+        self, user, account, scheduled_task_pending, mock_bean_file_path
+    ):
+        """账户配置 USD 且账本无交易时，仍返回 USD 候选，预期余额为 0"""
+        self._set_currency(account, 'USD')
+
+        with open(mock_bean_file_path, 'w', encoding='utf-8') as f:
+            f.write("")
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f'/api/reconciliation/tasks/{scheduled_task_pending.id}/start/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['balances']) == 1
+        item = response.data['balances'][0]
+        assert item['currency'] == 'USD'
+        assert Decimal(str(item['expected_balance'])) == Decimal('0.00')
+        assert response.data['default_currency'] == 'USD'
+
+    def test_start_lists_all_configured_currencies(
+        self, user, account, scheduled_task_pending, mock_bean_file_path
+    ):
+        """账户配置 CNY,COIN 时，即使 CNY 无余额也作为候选，且默认 CNY"""
+        self._set_currency(account, 'CNY,COIN')
+
+        bean_content = """
+2025-01-01 open Assets:Savings:Bank:ICBC CNY,COIN
+
+2025-01-15 * "测试交易"
+    Assets:Savings:Bank:ICBC 100.00 COIN
+    Income:Salary -100.00 COIN
+"""
+        with open(mock_bean_file_path, 'w', encoding='utf-8') as f:
+            f.write(bean_content)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f'/api/reconciliation/tasks/{scheduled_task_pending.id}/start/')
+
+        assert response.status_code == status.HTTP_200_OK
+        balances = {item['currency']: Decimal(str(item['expected_balance'])) for item in response.data['balances']}
+        assert balances == {'CNY': Decimal('0.00'), 'COIN': Decimal('100.00')}
+        assert response.data['default_currency'] == 'CNY'
+
+    def test_start_falls_back_to_ledger_when_account_currency_empty(
+        self, user, account, scheduled_task_pending, mock_bean_file_path
+    ):
+        """账户未配置币种时，仍按账本余额推导候选"""
+        bean_content = """
+2025-01-01 open Assets:Savings:Bank:ICBC CNY
+
+2025-01-15 * "测试交易"
+    Assets:Savings:Bank:ICBC 1000.00 CNY
+    Income:Salary -1000.00 CNY
+"""
+        with open(mock_bean_file_path, 'w', encoding='utf-8') as f:
+            f.write(bean_content)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f'/api/reconciliation/tasks/{scheduled_task_pending.id}/start/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert [item['currency'] for item in response.data['balances']] == ['CNY']
+        assert response.data['default_currency'] == 'CNY'
+
+    def test_execute_rejects_currency_outside_account_currency(
+        self, user, account, scheduled_task_pending, mock_bean_file_path,
+        mock_reconciliation_bean_path, mock_ensure_reconciliation_included
+    ):
+        """账户仅支持 USD 时，提交 CNY 应被拒绝"""
+        self._set_currency(account, 'USD')
+
+        bean_content = """
+2025-01-01 open Assets:Savings:Bank:ICBC USD
+
+2025-01-15 * "测试交易"
+    Assets:Savings:Bank:ICBC 1000.00 USD
+    Income:Salary -1000.00 USD
+"""
+        with open(mock_bean_file_path, 'w', encoding='utf-8') as f:
+            f.write(bean_content)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(
+            f'/api/reconciliation/tasks/{scheduled_task_pending.id}/execute/',
+            {
+                'actual_balance': '1000.00',
+                'currency': 'CNY',
+                'as_of_date': str(date.today())
+            },
+            format='json'
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert '不在账户可用币种' in str(response.data)
 

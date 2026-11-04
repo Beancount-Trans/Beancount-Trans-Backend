@@ -4,6 +4,8 @@ AccountCurrencyService 账户货币服务测试
 import pytest
 import os
 import tempfile
+from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from project.apps.reconciliation.services.account_currency_service import AccountCurrencyService
@@ -224,4 +226,49 @@ class TestAccountCurrencyService:
             
             # 应该正确解析并去除空格
             assert currencies == ['CNY', 'USD', 'EUR']
+
+
+class TestReconciliationCurrencies:
+    """对账币种候选解析测试"""
+
+    @staticmethod
+    def _account(currency):
+        return SimpleNamespace(currency=currency)
+
+    def test_get_configured_currencies(self):
+        assert AccountCurrencyService.get_configured_currencies(
+            self._account('CNY,COIN')
+        ) == ['CNY', 'COIN']
+        assert AccountCurrencyService.get_configured_currencies(self._account('')) == []
+        assert AccountCurrencyService.get_configured_currencies(self._account(None)) == []
+
+    def test_configured_currencies_take_priority_with_zero_balance(self):
+        """账户配置了币种时，全部返回，缺失余额按 0 处理"""
+        result = AccountCurrencyService.resolve_reconciliation_currencies(
+            self._account('CNY,COIN'),
+            {'COIN': Decimal('10.00')},
+        )
+
+        assert result == [
+            {'currency': 'CNY', 'expected_balance': Decimal('0.00')},
+            {'currency': 'COIN', 'expected_balance': Decimal('10.00')},
+        ]
+
+    def test_fallback_to_ledger_non_zero_balances(self):
+        """账户未配置币种时，回退账本非零余额"""
+        result = AccountCurrencyService.resolve_reconciliation_currencies(
+            self._account(''),
+            {'CNY': Decimal('100.00'), 'COIN': Decimal('0.00')},
+        )
+
+        assert result == [{'currency': 'CNY', 'expected_balance': Decimal('100.00')}]
+
+    def test_empty_configured_and_no_balance(self):
+        """账户未配置币种且账本无余额时返回空列表"""
+        result = AccountCurrencyService.resolve_reconciliation_currencies(
+            self._account(''),
+            {},
+        )
+
+        assert result == []
 
