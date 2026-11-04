@@ -2,9 +2,9 @@
 
 平台新增 / 启用 / 关闭 / 删除账户时，向用户账本追加 Beancount 指令：
 
-- 新增账户：``open`` + 同日一条 ``note`` 占位。``note`` 用于消除
-  ``beancount.plugins.nounused`` 插件的 ``Unused account`` 报错
-  （该插件文档给出的官方消音方式）。
+- 新增账户：``open``（统一使用早期基准日 2000-01-01）+ 当天一条 ``note`` 占位。
+  ``note`` 用于消除 ``beancount.plugins.nounused`` 插件的 ``Unused account`` 报错
+  （该插件文档给出的官方消音方式），同时承载真实的创建/启用时间。
 - 启用 / 关闭：追加带日期的状态 ``note``。平台的开关是可逆的，而 Beancount 的
   ``open`` / ``close`` 不可逆，因此不用 ``close`` 表达可逆状态。
 - 删除账户：追加 ``close``（不可逆操作才写 close）。
@@ -27,6 +27,8 @@ PLACEHOLDER_NOTE = "平台创建账户，暂无交易"
 STATE_NOTE_ENABLED = "平台启用账户"
 STATE_NOTE_DISABLED = "平台关闭账户"
 STATE_NOTES = (STATE_NOTE_ENABLED, STATE_NOTE_DISABLED)
+# 平台账户统一的开户基准日：早于任何可能的交易，避免回溯交易触发 inactive account
+OPEN_BASE_DATE = date(2000, 1, 1)
 # 早期版本用 note 记录删除，重建同名账户时顺带清理
 LEGACY_NOTE_DELETED = "平台删除账户"
 
@@ -123,16 +125,15 @@ def scan_account_state(user, account_name) -> dict:
     return state
 
 
-def _resolve_open_date(account, state) -> date:
-    """open 日期取「创建日期」与「账本最早引用日期」的较小值
+def _resolve_open_date(state) -> date:
+    """open 日期取固定基准日，若账本存在更早的引用则取更早者
 
     这样回溯上传早期账单时不会触发 Beancount 的 inactive account 错误。
     """
-    created_date = account.created.date() if account.created else date.today()
     earliest_reference = state.get('earliest_reference')
-    if earliest_reference and earliest_reference < created_date:
+    if earliest_reference and earliest_reference < OPEN_BASE_DATE:
         return earliest_reference
-    return created_date
+    return OPEN_BASE_DATE
 
 
 def _write(user, lines) -> str:
@@ -209,10 +210,11 @@ def sync_open(account) -> str | None:
             removed.append(note_line)
         return "\n".join(removed) if removed else None
 
-    open_date = _resolve_open_date(account, state)
+    open_date = _resolve_open_date(state)
+    record_date = max(date.today(), open_date)
     return _write(account.owner, [
         f"{open_date} open {account.account}",
-        f'{open_date} note {account.account} "{PLACEHOLDER_NOTE}"',
+        f'{record_date} note {account.account} "{PLACEHOLDER_NOTE}"',
     ])
 
 
@@ -229,7 +231,7 @@ def sync_state(account, state_text) -> str | None:
     lines = []
     open_date = state['open_date']
     if open_date is None:
-        open_date = _resolve_open_date(account, state)
+        open_date = _resolve_open_date(state)
         lines.append(f"{open_date} open {account.account}")
 
     record_date = max(date.today(), open_date)
@@ -249,7 +251,7 @@ def sync_close(account) -> str | None:
     lines = []
     open_date = state['open_date']
     if open_date is None:
-        open_date = _resolve_open_date(account, state)
+        open_date = _resolve_open_date(state)
         lines.append(f"{open_date} open {account.account}")
 
     close_date = max(date.today(), open_date)

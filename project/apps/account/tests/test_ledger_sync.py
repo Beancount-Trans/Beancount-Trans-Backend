@@ -1,14 +1,14 @@
 """账户同步账本状态功能测试
 
 覆盖：
-- 新建账户 → trans/collect.bean 追加 open + 同日 note 占位
+- 新建账户 → trans/collect.bean 追加 open（2000-01-01）+ 当天 note 占位
 - 自动创建的父账户不写入账本
 - 账本已有手工 open → 跳过、不重复
 - 启用 / 关闭 → 追加状态 note（可反复切换，不写 close）
 - 同日多次开关 → 相邻重复状态去重
 - 删除账户 → 追加 close（从未 open 则补 open）
 - 删除后又新建同名账户 → 移除账本中已有的 close
-- 账本存在早于创建日期的引用 → open 日期取更早者
+- 账本存在更早引用时 → open 仍为固定基准日
 - 生成后的账本通过 beancount.loader 加载，启用 nounused 插件无报错
 
 所有测试将 settings.ASSETS_BASE_PATH 指向 tmp_path，避免污染真实 Assets 目录。
@@ -22,6 +22,7 @@ from django.contrib.auth import get_user_model
 
 from project.apps.account.ledger_sync import (
     LEGACY_NOTE_DELETED,
+    OPEN_BASE_DATE,
     PLACEHOLDER_NOTE,
     STATE_NOTE_DISABLED,
     STATE_NOTE_ENABLED,
@@ -62,12 +63,11 @@ def _write_ledger_file(user, relative_path, content):
 
 
 def test_new_account_writes_open_and_note(user):
-    account = Account.objects.create(account=ACCOUNT_NAME, owner=user)
+    Account.objects.create(account=ACCOUNT_NAME, owner=user)
 
     text = _collect_text(user)
-    open_date = account.created.date()
-    assert f"{open_date} open {ACCOUNT_NAME}" in text
-    assert f'{open_date} note {ACCOUNT_NAME} "{PLACEHOLDER_NOTE}"' in text
+    assert f"{OPEN_BASE_DATE} open {ACCOUNT_NAME}" in text
+    assert f'{date.today()} note {ACCOUNT_NAME} "{PLACEHOLDER_NOTE}"' in text
     # collect.bean 已被 trans/main.bean include
     main_text = Path(BeanFileManager.get_trans_main_bean_path(user)).read_text(encoding='utf-8')
     assert 'include "collect.bean"' in main_text
@@ -231,7 +231,7 @@ def test_recreate_after_disabled_delete_writes_enable_note(user):
     assert text.rindex(f'"{STATE_NOTE_ENABLED}"') > text.rindex(f'"{STATE_NOTE_DISABLED}"')
 
 
-def test_open_date_uses_earliest_reference(user):
+def test_open_date_uses_fixed_base_date(user):
     _write_ledger_file(
         user,
         'trans/old_bill.bean',
@@ -244,7 +244,7 @@ def test_open_date_uses_earliest_reference(user):
     Account.objects.create(account=ACCOUNT_NAME, owner=user)
 
     text = _collect_text(user)
-    assert f"2025-01-01 open {ACCOUNT_NAME}" in text
+    assert f"{OPEN_BASE_DATE} open {ACCOUNT_NAME}" in text
 
 
 def test_generated_ledger_passes_beancount_nounused(user):
