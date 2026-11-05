@@ -386,6 +386,15 @@ class PlatformGitService:
             # 4. 重建 trans/main.bean
             # self._rebuild_trans_main_bean(user_assets_path)
 
+            # 4.1 远程可能带来新的账户 open，去重并记录残留错误（不中断同步）
+            dedupe_result = self._dedupe_ledger_opens(user)
+            ledger_warning = None
+            if dedupe_result.residual_errors:
+                ledger_warning = '账本仍有账户类错误：' + '; '.join(
+                    error['message'] for error in dedupe_result.residual_errors
+                )
+                git_repo.sync_error = ledger_warning[:1000]
+
             # 5. 更新同步状态
             git_repo.sync_status = 'success'
             git_repo.last_sync_at = timezone.now()
@@ -397,6 +406,7 @@ class PlatformGitService:
                 'status': 'success',
                 'message': '同步成功',
                 'synced_at': git_repo.last_sync_at,
+                'ledger_warning': ledger_warning,
             }
 
         except Exception as e:
@@ -747,6 +757,55 @@ class PlatformGitService:
         except Exception as e:
             logger.error(f"模板初始化过程中发生未知错误: {e}")
             raise GitServiceException(f"模板初始化失败: {e}")
+
+    def _dedupe_ledger_opens(self, user: User, *, strict: bool = False):
+        """删除平台账本文件中与其它生效账本文件重复的 open
+
+        Args:
+            user: 用户对象
+            strict: 为 True 时若仍存在账户类错误则抛 GitServiceException，
+                用于模板初始化，避免生成一个 Beancount 加载报错的仓库
+
+        Returns:
+            DedupeResult
+        """
+        from project.apps.account.ledger_dedupe import (
+            DedupeResult,
+            dedupe_platform_opens,
+        )
+
+        try:
+            result = dedupe_platform_opens(user)
+        except Exception as e:
+            logger.error(
+                "账本 open 去重失败 %s: %s", getattr(user, 'username', user), e
+            )
+            if strict:
+                raise GitServiceException(f"账本去重失败: {e}")
+            return DedupeResult(False, [], [], [])
+
+        if result.removed_opens:
+            logger.info(
+                "用户 %s 账本去重：删除重复 open %d 条",
+                getattr(user, 'username', user),
+                len(result.removed_opens),
+            )
+
+        if result.residual_errors:
+            messages = '; '.join(
+                error['message'] for error in result.residual_errors
+            )
+            logger.error(
+                "用户 %s 账本仍有账户类错误: %s",
+                getattr(user, 'username', user),
+                messages,
+            )
+            if strict:
+                raise GitServiceException(
+                    f"账本初始化后仍有账户类错误：{messages[:800]}"
+                )
+
+        return result
 
     def _clone_repository(self, git_repo: GitRepository, target_path: Path):
         """克隆仓库到本地"""
@@ -1160,6 +1219,9 @@ class PlatformGitService:
                     logger.error(f"没有备份的 trans/ 目录，可能存在重要错误")
                     # 如果没有现有的 trans/ 目录，创建基本结构
                     # self._ensure_trans_directory_structure(git_repo.owner.username)
+
+                # 7.1 模板 account/*.bean 可能与平台写入的 open 重复，先对账再提交
+                self._dedupe_ledger_opens(git_repo.owner, strict=True)
 
                 # 8. 添加所有文件（由于 .gitignore，trans/ 不会被添加）
                 subprocess.run(['git', 'add', '.'], check=True, capture_output=True, text=True)
