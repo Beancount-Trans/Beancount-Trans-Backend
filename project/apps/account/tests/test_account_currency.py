@@ -113,14 +113,14 @@ class TestAccountCurrencySave:
     def test_rewrite_preserves_booking_and_comment(self, user):
         _write_ledger(
             user,
-            'account/assets.bean',
+            'trans/collect.bean',
             f'2000-01-01 open {ACCOUNT_NAME} CNY "STRICT"  ; 测试注释\n',
         )
         account = Account.objects.create(account=ACCOUNT_NAME, owner=user, currency='CNY')
         account.currency = 'USD'
         account.save()
 
-        text = _read_ledger(user, 'account/assets.bean')
+        text = _read_ledger(user, 'trans/collect.bean')
         assert f'2000-01-01 open {ACCOUNT_NAME} USD "STRICT"  ; 测试注释' in text
 
     def test_rewrite_open_in_monthly_file(self, user):
@@ -209,7 +209,7 @@ class TestCurrencyConflict:
         pytest.importorskip('beancount.loader')
         _write_ledger(
             user,
-            'main.bean',
+            'trans/collect.bean',
             f'2000-01-01 open {ACCOUNT_NAME}\n'
             '2000-01-01 open Expenses:Food\n'
             '\n'
@@ -233,9 +233,7 @@ class TestCurrencyConflict:
         serializer.save()
 
         text = _read_ledger(user, 'trans/collect.bean')
-        assert f'open {ACCOUNT_NAME} CNY,COIN' in text or f'open {ACCOUNT_NAME} CNY,COIN' in _read_ledger(
-            user, 'main.bean'
-        )
+        assert f'open {ACCOUNT_NAME} CNY,COIN' in text
 
     def test_find_conflicts_returns_used_currency(self, user):
         pytest.importorskip('beancount.loader')

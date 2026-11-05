@@ -38,7 +38,37 @@ LEGACY_NOTE_DELETED = "平台删除账户"
 
 COLLECT_REL_PATH = 'trans/collect.bean'
 
-LedgerSyncResult = namedtuple('LedgerSyncResult', ['text', 'paths'])
+LedgerSyncResult = namedtuple(
+    'LedgerSyncResult', ['text', 'paths', 'warnings'], defaults=((),)
+)
+
+
+def _is_git_user(user) -> bool:
+    """是否启用了 Git（有无 GitRepository 记录）"""
+    return hasattr(user, 'git_repo')
+
+
+def _is_platform_managed(user, file_path) -> bool:
+    """文件是否属于平台可写区
+
+    - ``trans/`` 始终由平台独占写入；
+    - 非 Git 用户的历史月度文件（``{year}/**``）也由平台生成，视为平台区；
+    - Git 用户的 ``main.bean``、``account/**``、``{year}/**`` 属于用户区，平台不改写。
+    """
+    root = os.path.abspath(BeanFileManager.get_user_assets_path(user))
+    abs_path = os.path.abspath(file_path)
+    try:
+        rel_path = os.path.relpath(abs_path, root).replace(os.sep, '/')
+    except ValueError:
+        return False
+
+    if rel_path.startswith('../') or rel_path == '..':
+        return False
+    if rel_path == 'trans' or rel_path.startswith('trans/'):
+        return True
+    if not _is_git_user(user) and re.match(r'^\d{4}/', rel_path):
+        return True
+    return False
 
 _DATE_PREFIX_RE = re.compile(r'^(\d{4}-\d{2}-\d{2})(?:\s|$)')
 _OPEN_CLOSE_RE = re.compile(r'^(\d{4}-\d{2}-\d{2})\s+(open|close)\s+(\S+)')
@@ -175,14 +205,15 @@ def _write_result(user, lines) -> LedgerSyncResult:
 
 
 def _remove_close_entries(user, account_name):
-    """移除账本中该账户的 close（以及早期版本的删除状态 note）
+    """移除平台区中该账户的 close（以及早期版本的删除状态 note）
 
     重新创建同名账户时，账本里残存的 close 会让账户永久处于关闭状态
     （Beancount 同一账户只允许 open / close 各一次），因此需要移除。
-    覆盖用户账本目录下所有 `.bean`（含已归入月度的账本），仅删除单行 close 条目。
+    只处理平台区文件；用户区的 close 保持不动并返回提示，交由用户自行处理。
 
     Returns:
-        Tuple[List[str], List[str]]: (被移除的行, 发生改写的文件相对路径)
+        Tuple[List[str], List[str], List[str]]:
+            (被移除的行, 发生改写的文件相对路径, 因位于用户区而跳过的文件)
     """
     escaped_account = re.escape(account_name)
     close_re = re.compile(rf'^\d{{4}}-\d{{2}}-\d{{2}}\s+close\s+{escaped_account}\s*$')
@@ -192,6 +223,7 @@ def _remove_close_entries(user, account_name):
 
     removed = []
     changed_paths = []
+    skipped_paths = []
 
     for file_path, root in _iter_bean_file_paths(user):
         try:
@@ -211,13 +243,18 @@ def _remove_close_entries(user, account_name):
         if not file_removed:
             continue
 
+        rel_path = _rel_path(root, file_path)
+        if not _is_platform_managed(user, file_path):
+            skipped_paths.append(rel_path)
+            continue
+
         text = re.sub(r'\n{3,}', '\n\n', "\n".join(kept)).rstrip('\n') + '\n'
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(text)
         removed.extend(file_removed)
-        changed_paths.append(_rel_path(root, file_path))
+        changed_paths.append(rel_path)
 
-    return removed, changed_paths
+    return removed, changed_paths, skipped_paths
 
 
 def _split_inline_comment(text):
@@ -271,13 +308,17 @@ def _rewrite_open_line(line, account_name, currency) -> str:
 
 
 def _rewrite_open_currency(user, account_name, currency):
-    """就地重写账本中该账户 open 行的币种列表
+    """就地重写平台区中该账户 open 行的币种列表
+
+    只处理平台区文件；用户区的 open 保持不动并返回提示，交由用户自行调整。
 
     Returns:
-        Tuple[List[str], List[str]]: (改写后的行, 发生改写的文件相对路径)
+        Tuple[List[str], List[str], List[str]]:
+            (改写后的行, 发生改写的文件相对路径, 因位于用户区而跳过的文件)
     """
     changed_lines = []
     changed_paths = []
+    skipped_paths = []
 
     for file_path, root in _iter_bean_file_paths(user):
         try:
@@ -291,15 +332,21 @@ def _rewrite_open_currency(user, account_name, currency):
             continue
 
         file_changed = False
+        file_changed_lines = []
         new_lines = []
         for line in text.splitlines():
             new_line = _rewrite_open_line(line, account_name, currency)
             if new_line != line:
                 file_changed = True
-                changed_lines.append(new_line)
+                file_changed_lines.append(new_line)
             new_lines.append(new_line)
 
         if not file_changed:
+            continue
+
+        rel_path = _rel_path(root, file_path)
+        if not _is_platform_managed(user, file_path):
+            skipped_paths.append(rel_path)
             continue
 
         new_text = '\n'.join(new_lines)
@@ -307,9 +354,10 @@ def _rewrite_open_currency(user, account_name, currency):
             new_text += '\n'
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(new_text)
-        changed_paths.append(_rel_path(root, file_path))
+        changed_lines.extend(file_changed_lines)
+        changed_paths.append(rel_path)
 
-    return changed_lines, changed_paths
+    return changed_lines, changed_paths, skipped_paths
 
 
 def sync_open(account) -> LedgerSyncResult:
@@ -321,17 +369,31 @@ def sync_open(account) -> LedgerSyncResult:
     """
     state = scan_account_state(account.owner, account.account)
     if state['open_date'] is not None:
-        removed, close_paths = _remove_close_entries(account.owner, account.account)
+        removed, close_paths, close_skipped = _remove_close_entries(
+            account.owner, account.account
+        )
         lines = list(removed)
         paths = list(close_paths)
+        warnings = []
+
+        if close_skipped:
+            warnings.append(
+                f"账户 {account.account} 的 close 位于用户区文件 "
+                f"{', '.join(close_skipped)}，平台未改动，请在账本中自行处理"
+            )
 
         # 账本已有 open 时保留原行，仅按平台配置对齐币种
         if account.currency:
-            rewritten, rewrite_paths = _rewrite_open_currency(
+            rewritten, rewrite_paths, rewrite_skipped = _rewrite_open_currency(
                 account.owner, account.account, account.currency
             )
             lines.extend(rewritten)
             paths.extend(rewrite_paths)
+            if rewrite_skipped:
+                warnings.append(
+                    f"账户 {account.account} 的 open 位于用户区文件 "
+                    f"{', '.join(rewrite_skipped)}，平台未修改币种，请在账本中自行调整"
+                )
 
         # 重建的账户默认启用：若账本最后状态是「关闭」，补一条「启用」让状态链连贯
         if account.enable and state['last_state_note'] == STATE_NOTE_DISABLED:
@@ -342,7 +404,9 @@ def sync_open(account) -> LedgerSyncResult:
             paths.append(COLLECT_REL_PATH)
 
         unique_paths = list(dict.fromkeys(paths))
-        return LedgerSyncResult("\n".join(lines) if lines else None, unique_paths)
+        return LedgerSyncResult(
+            "\n".join(lines) if lines else None, unique_paths, warnings
+        )
 
     open_date = _resolve_open_date(state)
     record_date = max(date.today(), open_date)
@@ -403,8 +467,14 @@ def sync_currency(account) -> LedgerSyncResult:
     if state['open_date'] is None:
         return sync_open(account)
 
-    rewritten, paths = _rewrite_open_currency(
+    rewritten, paths, skipped = _rewrite_open_currency(
         account.owner, account.account, account.currency
     )
     text = "\n".join(rewritten) if rewritten else None
-    return LedgerSyncResult(text, paths)
+    warnings = []
+    if skipped:
+        warnings.append(
+            f"账户 {account.account} 的 open 位于用户区文件 "
+            f"{', '.join(skipped)}，平台未修改币种，请在账本中自行调整"
+        )
+    return LedgerSyncResult(text, paths, warnings)

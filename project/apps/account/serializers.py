@@ -209,6 +209,19 @@ class AccountSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'currency': list(e.messages)})
 
     def update(self, instance, validated_data):
+        # 账户改名：非 Git 用户同步改写平台区账本；Git 用户在此被拒绝
+        new_account = validated_data.get('account')
+        if new_account and new_account != instance.account:
+            from project.apps.account.account_rename import rename_account
+
+            try:
+                rename_account(instance, new_account)
+            except DjangoValidationError as e:
+                raise serializers.ValidationError({'account': list(e.messages)})
+            except IntegrityError:
+                raise serializers.ValidationError({'account': [_DUPLICATE_ACCOUNT_MSG]})
+            validated_data.pop('account', None)
+
         try:
             return super().update(instance, validated_data)
         except IntegrityError:
@@ -291,6 +304,19 @@ class AccountMigrationSerializer(serializers.Serializer):
             raise serializers.ValidationError("源账户和目标账户不能相同")
 
         return data
+
+
+class AccountReconcilePairSerializer(serializers.Serializer):
+    """单个账户改名配对"""
+
+    old_account = serializers.CharField(help_text='平台当前账户路径')
+    new_account = serializers.CharField(help_text='账本中已改用的新账户路径')
+
+
+class AccountReconcileApplySerializer(serializers.Serializer):
+    """确认应用账户改名配对"""
+
+    pairs = AccountReconcilePairSerializer(many=True, allow_empty=False)
 
 
 class AccountDeleteSerializer(serializers.Serializer):

@@ -195,7 +195,11 @@ class Account(BaseModel):
             self._create_reconciliation_task_if_needed()
 
         # 如果账户名称发生变化，同步更新所有子账户的名称
-        if account_name_changed and old_account_name:
+        if (
+            account_name_changed
+            and old_account_name
+            and not getattr(self, '_skip_children_rename', False)
+        ):
             self._update_children_account_names(old_account_name)
 
         # 新账户同步写入账本 open（自动创建的父账户通过 _skip_ledger_sync 跳过）
@@ -301,6 +305,12 @@ class Account(BaseModel):
         if result.text:
             logger.info(log_message)
         self._apply_ledger_git_sync(result, commit_message)
+
+        warnings = list(getattr(result, 'warnings', ()) or ())
+        if warnings:
+            message = "；".join(warnings)
+            existing = getattr(self, 'ledger_sync_warning', None)
+            self.ledger_sync_warning = f"{existing}；{message}" if existing else message
 
     def _apply_ledger_git_sync(self, result, commit_message):
         """把 trans/ 之外的账本改动提交并推送到 Git

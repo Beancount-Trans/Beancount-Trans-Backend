@@ -6,6 +6,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import transaction
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 # from django.shortcuts import get_object_or_404
 from django.apps import apps
 
@@ -13,6 +14,7 @@ from project.apps.account.models import Account, AccountTemplate, AccountTemplat
 from project.apps.account.serializers import (
     AccountSerializer, AccountTreeSerializer,
     AccountBatchUpdateSerializer, AccountMigrationSerializer, AccountDeleteSerializer,
+    AccountReconcileApplySerializer,
     AccountTemplateItemSerializer, AccountTemplateListSerializer, 
     AccountTemplateDetailSerializer, AccountTemplateApplySerializer
 )
@@ -136,6 +138,38 @@ class AccountViewSet(ModelViewSet):
 
         serializer = self.get_serializer(root_accounts, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def reconcile(self, request):
+        """对比账本 open 账户与平台账户，返回改名/新增候选"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'detail': '需要登录'}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        from project.apps.account.account_reconcile import diff_ledger_accounts
+
+        return Response(diff_ledger_accounts(request.user))
+
+    @action(detail=False, methods=['post'], url_path='reconcile/apply')
+    def reconcile_apply(self, request):
+        """确认旧 → 新配对，更新平台账户（仅 Git 用户）"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'detail': '需要登录'}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = AccountReconcileApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from project.apps.account.account_reconcile import apply_pairings
+
+        try:
+            applied = apply_pairings(request.user, serializer.validated_data['pairs'])
+        except DjangoValidationError as e:
+            raise ValidationError({'detail': list(e.messages)})
+
+        return Response({'applied': applied})
 
     @action(detail=True, methods=['get'])
     def mappings(self, request, pk=None):

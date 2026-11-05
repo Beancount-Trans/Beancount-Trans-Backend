@@ -26,8 +26,10 @@ from project.apps.account.ledger_sync import (
     PLACEHOLDER_NOTE,
     STATE_NOTE_DISABLED,
     STATE_NOTE_ENABLED,
+    sync_open,
 )
 from project.apps.account.models import Account
+from project.apps.git_repository.models import GitRepository
 from project.utils.file import BeanFileManager
 
 User = get_user_model()
@@ -49,6 +51,19 @@ def assets_dir(tmp_path, monkeypatch):
 @pytest.fixture
 def user(assets_dir):
     return User.objects.create_user(username='ledgeruser', password='testpass123')
+
+
+@pytest.fixture
+def git_user(assets_dir):
+    user = User.objects.create_user(username='gitledgeruser', password='testpass123')
+    GitRepository.objects.create(
+        owner=user,
+        repo_name='gitledgeruser-assets',
+        remote_ssh_url='git@example.com:org/repo.git',
+        deploy_key_private='-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----\n',
+        deploy_key_public='ssh-rsa AAAA',
+    )
+    return user
 
 
 def _collect_text(user):
@@ -293,3 +308,35 @@ def test_state_note_not_before_open_date(user):
         if line.endswith(f'note {ACCOUNT_NAME} "{STATE_NOTE_DISABLED}"')
     ][0]
     assert date.fromisoformat(note_line.split()[0]) >= date(2099, 1, 1)
+
+
+def test_git_user_close_in_user_area_is_not_removed(git_user):
+    path = _write_ledger_file(
+        git_user,
+        '2024/01.bean',
+        f"2000-01-01 open {ACCOUNT_NAME}\n"
+        f"\n"
+        f"2025-01-01 close {ACCOUNT_NAME}\n",
+    )
+
+    account = Account(account=ACCOUNT_NAME, owner=git_user, enable=True, currency='')
+    result = sync_open(account)
+
+    assert '2024/01.bean' not in result.paths
+    assert result.warnings
+    assert f"close {ACCOUNT_NAME}" in path.read_text(encoding='utf-8')
+
+
+def test_git_user_open_currency_in_user_area_is_not_rewritten(git_user):
+    path = _write_ledger_file(
+        git_user,
+        'account/assets.bean',
+        f"2000-01-01 open {ACCOUNT_NAME}\n",
+    )
+
+    account = Account(account=ACCOUNT_NAME, owner=git_user, enable=True, currency='CNY')
+    result = sync_open(account)
+
+    assert 'account/assets.bean' not in result.paths
+    assert result.warnings
+    assert 'CNY' not in path.read_text(encoding='utf-8')
