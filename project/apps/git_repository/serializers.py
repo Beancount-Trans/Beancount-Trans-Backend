@@ -33,6 +33,7 @@ class GitRepositorySerializer(serializers.ModelSerializer):
             'deploy_key_public', 'webhook_callback_url', 'setup_instructions',
             'created_with_template',
             'last_sync_at', 'sync_status', 'sync_error', 'sync_paused',
+            'auto_import_ledger_accounts',
             'deploy_key_download_url', 'created', 'modified',
         ]
         read_only_fields = [
@@ -63,6 +64,14 @@ class GitRepositorySerializer(serializers.ModelSerializer):
         ]
         lines.insert(0, PROVIDER_WEBHOOK_HINT.get(obj.provider, PROVIDER_WEBHOOK_HINT['other']))
         return lines
+
+
+class GitRepositorySettingsSerializer(serializers.ModelSerializer):
+    """仓库可写设置（当前仅自动导入账本新增账户）"""
+
+    class Meta:
+        model = GitRepository
+        fields = ['auto_import_ledger_accounts']
 
 
 class CreateRepositorySerializer(serializers.Serializer):
@@ -127,6 +136,12 @@ class SyncResponseSerializer(serializers.Serializer):
     error = serializers.CharField(
         required=False,
         help_text="错误详情"
+    )
+    imported_accounts = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+        help_text="本次同步自动导入的平台账户",
     )
 
 

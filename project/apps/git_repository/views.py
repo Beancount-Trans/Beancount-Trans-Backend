@@ -15,6 +15,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 from .models import GitRepository
 from .serializers import (
     GitRepositorySerializer, CreateRepositorySerializer, LinkRepositorySerializer,
+    GitRepositorySettingsSerializer,
     SyncStatusSerializer, SyncResponseSerializer,
     WebhookPayloadSerializer, DeployKeyResponseSerializer,
     DeleteRepositoryResponseSerializer, ClearSyncedLedgerResponseSerializer,
@@ -117,6 +118,32 @@ class GitRepositoryViewSet(ViewSet):
             return Response(payload, status=status.HTTP_201_CREATED)
         except GitServiceException as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="更新 Git 仓库设置",
+        request=GitRepositorySettingsSerializer,
+        responses={
+            200: GitRepositorySerializer,
+            404: OpenApiResponse(description="用户未启用 Git 功能"),
+        }
+    )
+    @action(detail=False, methods=['PATCH'], url_path='settings')
+    def update_settings(self, request: Request) -> Response:
+        """更新仓库级开关（如自动导入账本新增账户）"""
+        try:
+            git_repo = request.user.git_repo
+        except GitRepository.DoesNotExist:
+            return Response(
+                {'error': '用户未启用 Git 功能'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = GitRepositorySettingsSerializer(
+            git_repo, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(GitRepositorySerializer(git_repo).data)
 
     @extend_schema(
         summary="下载 Deploy Key",

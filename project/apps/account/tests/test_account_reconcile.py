@@ -94,6 +94,28 @@ def test_parent_accounts_are_not_reported_as_missing(user):
     assert 'Assets:Old:Sub' in result['db_only']
 
 
+def test_opened_parent_account_existing_in_db_is_not_ledger_only(user):
+    """账本同时 open 父与子账户时，平台自动补的父账户记录应算作已存在。"""
+    _create_account(user, 'Assets:Bank:CMB')
+    _write(
+        user,
+        'main.bean',
+        'include "scope.bean"\n',
+    )
+    _write(
+        user,
+        'scope.bean',
+        '2000-01-01 open Assets:Bank CNY\n'
+        '2000-01-01 open Assets:Bank:CMB CNY\n',
+    )
+
+    result = diff_ledger_accounts(user)
+
+    assert result['ledger_only'] == []
+    assert result['db_only'] == []
+    assert result['matched'] == ['Assets:Bank', 'Assets:Bank:CMB']
+
+
 def test_missing_main_bean_marks_ledger_unavailable(user):
     _create_account(user, 'Assets:Bank')
     Path(BeanFileManager.get_main_bean_path(user)).unlink()

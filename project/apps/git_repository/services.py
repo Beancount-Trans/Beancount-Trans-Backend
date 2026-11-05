@@ -393,6 +393,45 @@ class PlatformGitService:
                 ledger_warning = '账本仍有账户类错误：' + '; '.join(
                     error['message'] for error in dedupe_result.residual_errors
                 )
+
+            # 4.2 可选：把账本中显式 open、平台缺失的账户导入平台（默认关闭）
+            imported_accounts: list = []
+            if git_repo.auto_import_ledger_accounts:
+                from project.apps.account.account_reconcile import (
+                    import_declared_accounts,
+                )
+
+                try:
+                    import_result = import_declared_accounts(user)
+                except Exception as e:
+                    logger.error(
+                        "自动导入账本账户失败 %s: %s", user.username, e
+                    )
+                    message = f'自动导入账本账户失败：{e}'
+                    ledger_warning = (
+                        f'{ledger_warning}；{message}' if ledger_warning else message
+                    )
+                else:
+                    imported_accounts = import_result['created']
+                    if imported_accounts:
+                        logger.info(
+                            "用户 %s 自动导入账本账户 %d 个：%s",
+                            user.username,
+                            len(imported_accounts),
+                            ', '.join(imported_accounts),
+                        )
+                    if import_result['errors']:
+                        message = (
+                            '部分账本账户导入失败：'
+                            + '; '.join(import_result['errors'])
+                        )
+                        ledger_warning = (
+                            f'{ledger_warning}；{message}'
+                            if ledger_warning
+                            else message
+                        )
+
+            if ledger_warning:
                 git_repo.sync_error = ledger_warning[:1000]
 
             # 5. 更新同步状态
@@ -407,6 +446,7 @@ class PlatformGitService:
                 'message': '同步成功',
                 'synced_at': git_repo.last_sync_at,
                 'ledger_warning': ledger_warning,
+                'imported_accounts': imported_accounts,
             }
 
         except Exception as e:
