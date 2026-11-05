@@ -15,7 +15,7 @@ def apply_official_account_templates_on_signup(sender, request, user, **kwargs):
 
 def apply_official_account_templates(user):
     """应用官方账户模板到用户"""
-    from project.apps.account.models import Account
+    from project.apps.account.models import Account, is_valid_beancount_account_path
 
     # 获取所有官方账户模板
     official_templates = AccountTemplate.objects.filter(is_official=True)
@@ -26,6 +26,10 @@ def apply_official_account_templates(user):
         try:
             # 使用合并方式，跳过冲突
             for item in template.items.all():
+                # Beancount 不允许根账户，模板中的根账户只作分组
+                if not is_valid_beancount_account_path(item.account_path):
+                    continue
+
                 # 检查是否已存在相同路径的账户
                 existing = Account.objects.filter(owner=user, account=item.account_path).first()
 

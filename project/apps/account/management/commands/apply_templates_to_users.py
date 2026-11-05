@@ -12,7 +12,12 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from project.apps.account.models import Account, AccountTemplate, AccountTemplateItem
+from project.apps.account.models import (
+    Account,
+    AccountTemplate,
+    AccountTemplateItem,
+    is_valid_beancount_account_path,
+)
 from project.apps.maps.models import Template, TemplateItem, Expense, Assets, Income
 from project.apps.tags.models import Tag, TagTemplate
 from project.apps.translate.models import FormatConfig
@@ -277,6 +282,10 @@ class Command(BaseCommand):
 
         for item in template_items:
             account_path = item.account_path
+
+            # Beancount 不允许根账户，模板中的根账户只作分组
+            if not is_valid_beancount_account_path(account_path):
+                continue
 
             # 跳过已存在的账户
             if Account.objects.filter(owner=user, account=account_path).exists():

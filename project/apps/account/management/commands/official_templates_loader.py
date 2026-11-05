@@ -66,6 +66,14 @@ def load_official_account_data() -> Optional[dict]:
         if not _validate_account_item(item):
             logger.warning("account.json items[%d] 缺少有效 account_path，已跳过", i)
             return None
+
+    # Beancount 不允许只含根账户的路径；模板中的根账户只作分组，不落库
+    items = [item for item in items if ':' in item["account_path"].strip()]
+    if not items:
+        return None
+
+    data = dict(data)
+    data["items"] = items
     return data
 
 

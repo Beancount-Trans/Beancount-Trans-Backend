@@ -179,16 +179,21 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def validate_account(self, value):
         """验证账户路径格式"""
-        from project.apps.account.models import _is_valid_account_part
-        
-        if not all(_is_valid_account_part(part) for part in value.split(':')):
-            raise serializers.ValidationError("账户路径必须由字母、数字和连字符组成，用冒号分隔，不能以连字符开头或结尾")
+        from project.apps.account.models import (
+            is_root_account_path,
+            is_valid_beancount_account_path,
+        )
 
-        # 验证根账户类型
-        root = value.split(':')[0]
-        valid_roots = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses']
-        if root not in valid_roots:
-            raise serializers.ValidationError(f"根账户必须是以下之一: {', '.join(valid_roots)}")
+        if is_root_account_path(value):
+            raise serializers.ValidationError(
+                "Beancount 不允许只含根账户的路径，账户至少需要一级子账户"
+            )
+
+        if not is_valid_beancount_account_path(value):
+            raise serializers.ValidationError(
+                "账户路径必须由根账户和至少一级子账户组成，"
+                "用冒号分隔，且只能包含字母、数字和连字符"
+            )
 
         request = self.context.get('request')
         if request and getattr(request.user, 'is_authenticated', False):
@@ -359,6 +364,16 @@ class AccountTemplateItemSerializer(serializers.ModelSerializer):
                 RecurrenceParser.parse(value)
             except RecurrenceParseError as e:
                 raise serializers.ValidationError(str(e))
+        return value
+
+    def validate_account_path(self, value):
+        """账户模板项同样必须符合 Beancount 账户规范"""
+        from project.apps.account.models import is_valid_beancount_account_path
+
+        if not is_valid_beancount_account_path(value):
+            raise serializers.ValidationError(
+                "账户路径必须由根账户和至少一级子账户组成"
+            )
         return value
 
 

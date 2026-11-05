@@ -417,13 +417,13 @@ class TestInitOfficialTemplates(TransactionTestCase):
         # 验证账户层级关系
         for item in account_data['items']:
             account = Account.objects.get(account=item['account_path'], owner=admin_user)
-            if ':' in item['account_path']:
-                # 有父账户
-                parent_path = ':'.join(item['account_path'].split(':')[:-1])
+            parent_path = ':'.join(item['account_path'].split(':')[:-1])
+            if ':' in parent_path:
+                # 父账户本身是合法的非根账户
                 parent_account = Account.objects.get(account=parent_path, owner=admin_user)
                 self.assertEqual(account.parent, parent_account)
             else:
-                # 根账户
+                # 一级子账户：根账户不落库，parent 为空
                 self.assertIsNone(account.parent)
 
         # 验证 enable 状态

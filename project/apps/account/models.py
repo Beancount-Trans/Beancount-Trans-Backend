@@ -31,6 +31,24 @@ def _is_valid_account_part(part: str) -> bool:
     return bool(re.match(r'^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$', part))
 
 
+ROOT_ACCOUNTS = ('Assets', 'Liabilities', 'Equity', 'Income', 'Expenses')
+
+
+def is_root_account_path(account: str) -> bool:
+    """是否只包含根账户（Beancount 不允许这种账户路径）"""
+    return account in ROOT_ACCOUNTS
+
+
+def is_valid_beancount_account_path(account: str) -> bool:
+    """账户路径是否符合 Beancount 规范：根账户 + 至少一级子账户"""
+    if not account:
+        return False
+    parts = account.split(':')
+    if len(parts) < 2 or parts[0] not in ROOT_ACCOUNTS:
+        return False
+    return all(_is_valid_account_part(part) for part in parts)
+
+
 class Account(BaseModel):
     account = models.CharField(max_length=128, help_text="账户路径", verbose_name="账户")
     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='children', help_text="父账户", verbose_name="父账户")
@@ -64,12 +82,17 @@ class Account(BaseModel):
         return self.account
 
     def clean(self):
+        if is_root_account_path(self.account):
+            raise ValidationError(
+                "Beancount 不允许只含根账户的路径，账户至少需要一级子账户"
+            )
+
         if not all(_is_valid_account_part(part) for part in self.account.split(':')):
             raise ValidationError("账户路径必须由字母、数字和连字符组成，用冒号分隔，不能以连字符开头或结尾")
 
         # 验证根账户类型
         root = self.account.split(':')[0]
-        valid_roots = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses']
+        valid_roots = list(ROOT_ACCOUNTS)
         if root not in valid_roots:
             raise ValidationError(f"根账户必须是以下之一: {', '.join(valid_roots)}")
 
@@ -111,6 +134,12 @@ class Account(BaseModel):
 
     def save(self, *args, **kwargs):
         """保存账户时自动创建父账户，并同步映射状态"""
+        # Beancount 不允许只含根账户的路径，根账户也不应写入数据库
+        if is_root_account_path(self.account):
+            raise ValidationError(
+                "Beancount 不允许只含根账户的路径，账户至少需要一级子账户"
+            )
+
         # 规范化并校验币种格式/账户类型
         self.currency = validate_currency_codes(self.currency)
         if self.currency and not is_currency_account(self.account):
@@ -155,18 +184,24 @@ class Account(BaseModel):
         # 始终根据新的账户路径计算并设置父账户
         if ':' in self.account:
             parent_account_path = ':'.join(self.account.split(':')[:-1])
-            try:
-                # 尝试获取已存在的父账户
-                new_parent = Account.objects.get(account=parent_account_path, owner=self.owner)
-                # 关键修复：防止账户成为自己的父账户（防止循环引用）
-                if new_parent.pk == self.pk:
-                    raise ValidationError("账户不能成为自己的父账户")
-                # 只有当父账户确实需要改变时才更新
-                if self.parent != new_parent:
-                    self.parent = new_parent
-            except Account.DoesNotExist:
-                # 自动创建父账户
-                self.parent = self._create_parent_account(parent_account_path)
+            if is_root_account_path(parent_account_path):
+                # 根账户不创建数据库记录；历史数据仍有根账户时复用
+                self.parent = Account.objects.filter(
+                    account=parent_account_path, owner=self.owner
+                ).first()
+            else:
+                try:
+                    # 尝试获取已存在的父账户
+                    new_parent = Account.objects.get(account=parent_account_path, owner=self.owner)
+                    # 关键修复：防止账户成为自己的父账户（防止循环引用）
+                    if new_parent.pk == self.pk:
+                        raise ValidationError("账户不能成为自己的父账户")
+                    # 只有当父账户确实需要改变时才更新
+                    if self.parent != new_parent:
+                        self.parent = new_parent
+                except Account.DoesNotExist:
+                    # 自动创建父账户
+                    self.parent = self._create_parent_account(parent_account_path)
         else:
             # 根级账户，没有父账户
             self.parent = None
@@ -232,15 +267,8 @@ class Account(BaseModel):
                 parent._skip_ledger_sync = True
                 parent.save()
             else:
-                # 这是根级账户，直接创建（父账户不写入账本）
-                parent = Account(
-                    account=parent_account_path,
-                    owner=self.owner,
-                    enable=True
-                )
-                parent._skip_ledger_sync = True
-                parent.save()
-
+                # 根账户不是合法的 Beancount 账户，不创建数据库记录
+                return None
             return parent
 
     def _update_children_account_names(self, old_account_name):

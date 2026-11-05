@@ -298,22 +298,14 @@ class TestUserProfile:
         except LookupError:
             pytest.skip("Account 模型不存在，跳过测试")
 
-        # 创建具有父子关系的账户树
-        # Assets (根账户)
-        #   └── Assets:Savings (子账户)
-        #       └── Assets:Savings:Bank (孙账户)
-        #           └── Assets:Savings:Bank:ICBC (曾孙账户)
-
-        root_account = Account.objects.create(
-            account='Assets',
-            owner=self.user,
-            enable=True
-        )
+        # 创建具有父子关系的账户树（根账户不落库）
+        # Assets:Savings
+        #   └── Assets:Savings:Bank
+        #       └── Assets:Savings:Bank:ICBC
 
         child_account = Account.objects.create(
             account='Assets:Savings',
             owner=self.user,
-            parent=root_account,
             enable=True
         )
 
@@ -332,11 +324,11 @@ class TestUserProfile:
         )
 
         # 验证账户已创建且父子关系正确
-        assert Account.objects.filter(owner=self.user).count() == 4
+        assert Account.objects.filter(owner=self.user).count() == 3
         child_account.refresh_from_db()
         grandchild_account.refresh_from_db()
         great_grandchild_account.refresh_from_db()
-        assert child_account.parent == root_account
+        assert child_account.parent is None
         assert grandchild_account.parent == child_account
         assert great_grandchild_account.parent == grandchild_account
 

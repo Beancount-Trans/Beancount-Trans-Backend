@@ -27,7 +27,11 @@ from project.apps.account.ledger_sync import (
     _rel_path,
     _split_inline_comment,
 )
-from project.apps.account.models import Account, _is_valid_account_part
+from project.apps.account.models import (
+    Account,
+    is_root_account_path,
+    is_valid_beancount_account_path,
+)
 from project.utils.file import BeanFileManager
 
 logger = logging.getLogger(__name__)
@@ -37,21 +41,20 @@ RenameResult = namedtuple(
     ['old_account', 'new_account', 'changed_paths', 'renamed_accounts'],
 )
 
-_ROOT_ACCOUNTS = ('Assets', 'Liabilities', 'Equity', 'Income', 'Expenses')
-
-
 def _validate_new_name(account, new_name):
     if not new_name:
         raise ValidationError("新的账户路径不能为空")
 
-    if not all(_is_valid_account_part(part) for part in new_name.split(':')):
+    if is_root_account_path(new_name):
         raise ValidationError(
-            "账户路径必须由字母、数字和连字符组成，用冒号分隔，不能以连字符开头或结尾"
+            "Beancount 不允许只含根账户的路径，账户至少需要一级子账户"
         )
 
-    root = new_name.split(':')[0]
-    if root not in _ROOT_ACCOUNTS:
-        raise ValidationError(f"根账户必须是以下之一: {', '.join(_ROOT_ACCOUNTS)}")
+    if not is_valid_beancount_account_path(new_name):
+        raise ValidationError(
+            "账户路径必须由根账户和至少一级子账户组成，"
+            "用冒号分隔，且只能包含字母、数字和连字符"
+        )
 
     if new_name == account.account:
         raise ValidationError("新的账户路径与当前一致")

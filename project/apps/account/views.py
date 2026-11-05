@@ -10,7 +10,12 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 # from django.shortcuts import get_object_or_404
 from django.apps import apps
 
-from project.apps.account.models import Account, AccountTemplate, AccountTemplateItem
+from project.apps.account.models import (
+    Account,
+    AccountTemplate,
+    AccountTemplateItem,
+    is_valid_beancount_account_path,
+)
 from project.apps.account.serializers import (
     AccountSerializer, AccountTreeSerializer,
     AccountBatchUpdateSerializer, AccountMigrationSerializer, AccountDeleteSerializer,
@@ -421,6 +426,9 @@ class AccountTemplateViewSet(ModelViewSet):
             Account.objects.filter(owner=user).delete()
             # 直接创建所有模板账户，无需检查冲突
             for item in template.items.all():
+                # Beancount 不允许根账户，模板中的根账户只作分组
+                if not is_valid_beancount_account_path(item.account_path):
+                    continue
                 Account.objects.create(
                     owner=user,
                     account=item.account_path,
@@ -431,6 +439,10 @@ class AccountTemplateViewSet(ModelViewSet):
                 result['created'] += 1
         else:  # merge 模式
             for item in template.items.all():
+                # Beancount 不允许根账户，模板中的根账户只作分组
+                if not is_valid_beancount_account_path(item.account_path):
+                    continue
+
                 # 检查是否已存在相同路径的账户
                 existing = Account.objects.filter(owner=user, account=item.account_path).first()
 
