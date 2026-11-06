@@ -26,6 +26,19 @@ def _is_ledger_custodied(serializer, obj) -> bool:
     )
 
 
+def _is_ledger_closed(serializer, obj) -> bool:
+    """账户是否已在账本 close；同一请求内复用解析结果"""
+    from project.apps.account.custody import ledger_closed_accounts
+
+    if not obj.owner_id:
+        return False
+
+    cache = serializer.context.setdefault('_ledger_closed', {})
+    if obj.owner_id not in cache:
+        cache[obj.owner_id] = ledger_closed_accounts(obj.owner)
+    return obj.account in cache[obj.owner_id]
+
+
 class AccountTreeSerializer(serializers.ModelSerializer):
     """账户树形结构序列化器"""
     children = serializers.SerializerMethodField()
@@ -33,13 +46,14 @@ class AccountTreeSerializer(serializers.ModelSerializer):
     account_type = serializers.CharField(source='get_account_type', read_only=True)
     mapping_count = serializers.SerializerMethodField()
     is_ledger_custodied = serializers.SerializerMethodField()
+    is_ledger_closed = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = [
             'id', 'account', 'parent', 'parent_account',
             'owner', 'enable', 'currency', 'account_type', 'mapping_count',
-            'is_ledger_custodied',
+            'is_ledger_custodied', 'is_ledger_closed',
             'reconciliation_rule',
             'description', 'children', 'created', 'modified'
         ]
@@ -47,6 +61,9 @@ class AccountTreeSerializer(serializers.ModelSerializer):
 
     def get_is_ledger_custodied(self, obj):
         return _is_ledger_custodied(self, obj)
+
+    def get_is_ledger_closed(self, obj):
+        return _is_ledger_closed(self, obj)
 
     def get_children(self, obj):
         """递归获取子账户"""
@@ -104,13 +121,14 @@ class AccountSerializer(serializers.ModelSerializer):
     mapping_count = serializers.SerializerMethodField()
     ledger_sync_warning = serializers.SerializerMethodField()
     is_ledger_custodied = serializers.SerializerMethodField()
+    is_ledger_closed = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = [
             'id', 'account', 'parent', 'parent_account',
             'owner', 'enable', 'currency', 'account_type', 'has_children', 'mapping_count',
-            'is_ledger_custodied',
+            'is_ledger_custodied', 'is_ledger_closed',
             'reconciliation_rule',
             'description', 'ledger_sync_warning', 'created', 'modified'
         ]
@@ -121,6 +139,9 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def get_is_ledger_custodied(self, obj):
         return _is_ledger_custodied(self, obj)
+
+    def get_is_ledger_closed(self, obj):
+        return _is_ledger_closed(self, obj)
 
     def validate_reconciliation_rule(self, value):
         """校验对账周期规则（受控自然语言 DSL）"""

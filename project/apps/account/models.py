@@ -653,11 +653,16 @@ class Account(BaseModel):
         if self.has_children():
             raise ValidationError("存在子账户，无法删除。请先处理子账户")
 
-        # 账本托管账户必须先回到账本处理，避免平台删了又被同步补回
+        # 账本托管账户必须先回到账本处理；账本已 close 的账户可直接清理
         if self.owner_id:
-            from project.apps.account.custody import is_ledger_custodied
+            from project.apps.account.custody import (
+                is_ledger_closed,
+                is_ledger_custodied,
+            )
 
-            if is_ledger_custodied(self.owner, self):
+            if not is_ledger_closed(self.owner, self) and is_ledger_custodied(
+                self.owner, self
+            ):
                 raise ValidationError(
                     "该账户由账本管理（用户区仍有 open 或引用），"
                     "请先在账本中删除并同步，再清理平台记录"

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
-from project.apps.account.custody import is_ledger_custodied
+from project.apps.account.custody import is_ledger_closed, is_ledger_custodied
 from project.apps.account.models import Account
 from project.apps.git_repository.models import GitRepository
 from project.utils.file import BeanFileManager
@@ -128,3 +128,28 @@ def test_delete_allowed_for_platform_account(git_user):
 
     assert not Account.objects.filter(pk=account.pk).exists()
     assert 'close Assets:Wallet' in _read(git_user, 'trans/collect.bean')
+
+
+def test_delete_allowed_for_ledger_closed_account(git_user):
+    """账本已 close 的账户仍有历史引用，但平台记录应可直接清理。"""
+    _write(
+        git_user,
+        'main.bean',
+        'include "account/assets.bean"\n',
+    )
+    _write(
+        git_user,
+        'account/assets.bean',
+        '2000-01-01 open Assets:Wallet CNY\n'
+        '2000-01-02 close Assets:Wallet\n',
+    )
+    account = Account(account='Assets:Wallet', owner=git_user, currency='CNY')
+    account._skip_ledger_sync = True
+    account.save()
+
+    assert is_ledger_custodied(git_user, account) is True
+    assert is_ledger_closed(git_user, account) is True
+
+    account.delete_with_migration()
+
+    assert not Account.objects.filter(pk=account.pk).exists()

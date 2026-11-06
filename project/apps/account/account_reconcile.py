@@ -37,8 +37,12 @@ def diff_ledger_accounts(user) -> dict:
             'ledger_available': bool,
             'ledger_only': list[str],
             'db_only': list[str],
+            'ledger_closed': list[str],
             'matched': list[str],
         }
+
+    ``ledger_closed`` 是「平台仍有、账本已 close」的叶子账户：删除动作已经在账本
+    完成，平台侧只剩清理，不再属于改名候选。
     """
     main_path = BeanFileManager.get_main_bean_path(user)
     ledger_available = os.path.isfile(main_path)
@@ -47,6 +51,7 @@ def diff_ledger_accounts(user) -> dict:
             'ledger_available': False,
             'ledger_only': [],
             'db_only': [],
+            'ledger_closed': [],
             'matched': [],
         }
 
@@ -67,7 +72,8 @@ def diff_ledger_accounts(user) -> dict:
     return {
         'ledger_available': ledger_available,
         'ledger_only': sorted(ledger_accounts - db_accounts),
-        'db_only': sorted(db_leaf_accounts - ledger_accounts),
+        'db_only': sorted(db_leaf_accounts - ledger_accounts - ledger_closes),
+        'ledger_closed': sorted(db_leaf_accounts & ledger_closes),
         'matched': sorted(ledger_accounts & db_accounts),
     }
 

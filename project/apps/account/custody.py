@@ -14,7 +14,7 @@
 """
 import os
 
-from project.apps.account.ledger_refs import build_account_index
+from project.apps.account.ledger_refs import build_account_index, declared_state
 from project.apps.account.ledger_sync import _is_git_user, _is_platform_managed
 from project.utils.file import BeanFileManager
 
@@ -62,3 +62,25 @@ def ledger_custody_files(user, account, *, index=None) -> list[str]:
 def is_ledger_custodied(user, account, *, index=None) -> bool:
     """账户是否由账本托管（改名、改币种、删除都应在账本完成）"""
     return bool(ledger_custody_files(user, account, index=index))
+
+
+def ledger_closed_accounts(user, *, state=None) -> set:
+    """账本中已 close 的账户集合（Git 用户）
+
+    已 close 的账户历史已尘埃落定，平台侧残留记录可以直接清理，
+    不需要也不应该再改写账本。
+    """
+    if not _is_git_user(user):
+        return set()
+
+    if state is None:
+        state = declared_state(user)
+    _opens, closes = state
+    return set(closes)
+
+
+def is_ledger_closed(user, account) -> bool:
+    """账户是否已在账本中 close"""
+    if not account.owner_id:
+        return False
+    return account.account in ledger_closed_accounts(user)

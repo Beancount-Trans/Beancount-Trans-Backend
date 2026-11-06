@@ -116,6 +116,59 @@ def test_opened_parent_account_existing_in_db_is_not_ledger_only(user):
     assert result['matched'] == ['Assets:Bank', 'Assets:Bank:CMB']
 
 
+def test_diff_separates_ledger_closed_accounts(git_user):
+    """平台残留且账本已 close 的账户单独归类，不再作为改名候选。"""
+    _create_account(git_user, 'Assets:Old')
+    _write_simple_ledger(
+        git_user,
+        '2000-01-01 open Assets:Old CNY\n'
+        '2000-01-02 close Assets:Old\n'
+        '2000-01-01 open Assets:New CNY\n',
+    )
+
+    result = diff_ledger_accounts(git_user)
+
+    assert result['db_only'] == []
+    assert result['ledger_closed'] == ['Assets:Old']
+    assert result['ledger_only'] == ['Assets:New']
+
+
+def test_reconcile_api_reports_ledger_closed(git_user):
+    _create_account(git_user, 'Assets:Old')
+    _write_simple_ledger(
+        git_user,
+        '2000-01-01 open Assets:Old CNY\n'
+        '2000-01-02 close Assets:Old\n',
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=git_user)
+
+    response = client.get('/api/account/reconcile/')
+
+    assert response.status_code == 200, response.data
+    assert response.data['db_only'] == []
+    assert response.data['ledger_closed'] == ['Assets:Old']
+
+
+def test_account_tree_exposes_ledger_closed_flag(git_user):
+    _create_account(git_user, 'Assets:Old')
+    _write_simple_ledger(
+        git_user,
+        '2000-01-01 open Assets:Old CNY\n'
+        '2000-01-02 close Assets:Old\n',
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=git_user)
+
+    response = client.get('/api/account/tree/')
+
+    assert response.status_code == 200, response.data
+    node = next(item for item in response.data if item['account'] == 'Assets:Old')
+    assert node['is_ledger_closed'] is True
+
+
 def test_missing_main_bean_marks_ledger_unavailable(user):
     _create_account(user, 'Assets:Bank')
     Path(BeanFileManager.get_main_bean_path(user)).unlink()
