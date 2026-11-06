@@ -431,9 +431,36 @@ class PlatformGitService:
                             else message
                         )
 
+            # 4.3 账本托管的账户币种以账本 open 为准，同步回平台
+            updated_account_currencies: list = []
+            from project.apps.account.account_reconcile import (
+                sync_declared_currencies,
+            )
+
+            try:
+                currency_result = sync_declared_currencies(user)
+            except Exception as e:
+                logger.error(
+                    "同步账本账户币种失败 %s: %s", user.username, e
+                )
+                message = f'同步账本账户币种失败：{e}'
+                ledger_warning = (
+                    f'{ledger_warning}；{message}' if ledger_warning else message
+                )
+            else:
+                updated_account_currencies = currency_result['updated']
+                if updated_account_currencies:
+                    logger.info(
+                        "用户 %s 从账本同步账户币种 %d 个：%s",
+                        user.username,
+                        len(updated_account_currencies),
+                        ', '.join(
+                            item['account'] for item in updated_account_currencies
+                        ),
+                    )
+
             if ledger_warning:
                 git_repo.sync_error = ledger_warning[:1000]
-
             # 5. 更新同步状态
             git_repo.sync_status = 'success'
             git_repo.last_sync_at = timezone.now()
@@ -447,6 +474,7 @@ class PlatformGitService:
                 'synced_at': git_repo.last_sync_at,
                 'ledger_warning': ledger_warning,
                 'imported_accounts': imported_accounts,
+                'updated_account_currencies': updated_account_currencies,
             }
 
         except Exception as e:

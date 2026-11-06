@@ -143,6 +143,12 @@ class SyncResponseSerializer(serializers.Serializer):
         default=list,
         help_text="本次同步自动导入的平台账户",
     )
+    updated_account_currencies = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list,
+        help_text="本次同步从账本更新的账户币种（account/old/new）",
+    )
 
 
 class WebhookPayloadSerializer(serializers.Serializer):

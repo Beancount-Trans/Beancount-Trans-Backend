@@ -6,15 +6,22 @@
 
 Git 用户改名依赖这一步先给出候选，再由用户确认。
 ``import_declared_accounts`` 供「自动导入账本新增账户」开关调用，只新增平台账户。
+``sync_declared_currencies`` 在每次 Git 同步后把用户区 open 的币种回写平台。
 """
 import os
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count
+from django.utils import timezone
 
-from project.apps.account.ledger_refs import declared_state, referenced_accounts
-from project.apps.account.ledger_sync import _is_git_user
+from project.apps.account.currency import is_currency_account, normalize_currency_codes
+from project.apps.account.ledger_refs import (
+    declared_currencies,
+    declared_state,
+    referenced_accounts,
+)
+from project.apps.account.ledger_sync import _is_git_user, _is_platform_managed
 from project.apps.account.models import Account, is_valid_beancount_account_path
 from project.utils.file import BeanFileManager
 
@@ -82,6 +89,7 @@ def import_declared_accounts(user) -> dict:
     if not diff['ledger_available']:
         return empty
 
+    declared = declared_currencies(user)
     created, skipped, errors = [], [], []
     for name in diff['ledger_only']:
         if not is_valid_beancount_account_path(name):
@@ -91,7 +99,14 @@ def import_declared_accounts(user) -> dict:
             skipped.append(name)
             continue
 
-        account = Account(account=name, owner=user, enable=True)
+        # 资产/负债账户沿用账本 open 声明的币种，其余类型平台不支持币种
+        currency = ''
+        if is_currency_account(name):
+            currency = normalize_currency_codes(
+                ','.join(declared.get(name, {}).get('currencies') or [])
+            )
+
+        account = Account(account=name, owner=user, enable=True, currency=currency)
         account._skip_ledger_sync = True
         try:
             account.save()
@@ -101,6 +116,63 @@ def import_declared_accounts(user) -> dict:
         created.append(name)
 
     return {'created': created, 'skipped': skipped, 'errors': errors}
+
+
+def sync_declared_currencies(user) -> dict:
+    """把用户区账本 open 声明的币种同步到平台账户（Git 用户）
+
+    账本托管的账户不允许在平台修改币种，因此币种必须以账本 open 为准：
+    - 只处理 open 位于用户区（非 ``trans/``）的账户；
+    - 平台区 open 由平台自己写入，跳过，避免与平台配置互相覆盖；
+    - open 未声明币种时清空平台币种（表示不限制）；
+    - 仅资产/负债账户支持币种，其余账户跳过。
+
+    Returns:
+        dict: {'updated': [{'account': str, 'old': str, 'new': str}]}
+    """
+    empty = {'updated': []}
+    if not _is_git_user(user):
+        return empty
+
+    declared = declared_currencies(user)
+    if not declared:
+        return empty
+
+    root = BeanFileManager.get_user_assets_path(user)
+    accounts = {
+        account.account: account for account in Account.objects.filter(owner=user)
+    }
+    updated = []
+    for account_name, info in declared.items():
+        if not is_currency_account(account_name):
+            continue
+
+        rel_path = info.get('file')
+        if not rel_path:
+            continue
+        if _is_platform_managed(user, os.path.join(root, rel_path)):
+            continue
+
+        account = accounts.get(account_name)
+        if account is None:
+            continue
+
+        new_currency = normalize_currency_codes(','.join(info.get('currencies') or []))
+        old_currency = account.currency or ''
+        if old_currency == new_currency:
+            continue
+
+        # 走 queryset.update：绕过 save() 的托管态币种拦截，且不回写账本
+        Account.objects.filter(pk=account.pk).update(
+            currency=new_currency, modified=timezone.now()
+        )
+        updated.append({
+            'account': account_name,
+            'old': old_currency,
+            'new': new_currency,
+        })
+
+    return {'updated': updated}
 
 
 def apply_pairings(user, pairs):

@@ -101,6 +101,30 @@ def declared_state(user):
     return opens, closes
 
 
+def declared_currencies(user):
+    """账本 open 声明的账户币种
+
+    Returns:
+        dict[str, dict]: 账户 → {'currencies': list[str], 'file': 相对路径}
+        未声明币种时 ``currencies`` 为空列表；主账本缺失时返回空字典。
+    """
+    main_path = BeanFileManager.get_main_bean_path(user)
+    if not os.path.isfile(main_path):
+        return {}
+
+    entries, _errors, _options = loader.load_file(main_path)
+    result = {}
+    for entry in entries:
+        if not isinstance(entry, data.Open) or not entry.account:
+            continue
+        filename = (entry.meta or {}).get('filename')
+        result[entry.account] = {
+            'currencies': list(entry.currencies or []),
+            'file': _rel_path(user, filename) if filename else None,
+        }
+    return result
+
+
 def declared_accounts(user):
     """账本中声明过 open 的账户集合"""
     return declared_state(user)[0]
