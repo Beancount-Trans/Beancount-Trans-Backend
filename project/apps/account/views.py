@@ -293,6 +293,11 @@ class AccountViewSet(ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        except DjangoValidationError as e:
+            return Response(
+                {'error': '；'.join(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             return Response(
                 {'error': f'删除账户失败: {str(e)}'},

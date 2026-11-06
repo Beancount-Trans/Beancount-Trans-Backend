@@ -114,7 +114,23 @@ def test_rename_updates_children(user):
     assert 'Assets:Old' not in _read(user, 'trans/collect.bean')
 
 
-def test_git_user_cannot_rename(git_user):
+def test_git_user_platform_account_can_rename(git_user):
+    """Git 用户只在平台区有 open 时，允许平台改名。"""
+    _write(git_user, 'main.bean', 'include "trans/collect.bean"\n')
+    _write(git_user, 'trans/collect.bean', '2000-01-01 open Assets:Old CNY\n')
+    account = _create_account(git_user, 'Assets:Old')
+
+    rename_account(account, 'Assets:New')
+
+    account.refresh_from_db()
+    assert account.account == 'Assets:New'
+    assert 'Assets:New' in _read(git_user, 'trans/collect.bean')
+
+
+def test_git_user_ledger_account_cannot_rename(git_user):
+    """Git 用户账本已有 open 时，改名需回到账本。"""
+    _write(git_user, 'main.bean', 'include "account/assets.bean"\n')
+    _write(git_user, 'account/assets.bean', '2000-01-01 open Assets:Old CNY\n')
     account = _create_account(git_user, 'Assets:Old')
 
     with pytest.raises(ValidationError):
@@ -155,7 +171,9 @@ def test_serializer_update_triggers_rename(user):
     assert 'Assets:New' in _read(user, 'trans/collect.bean')
 
 
-def test_serializer_rejects_git_user_rename(git_user):
+def test_serializer_rejects_ledger_custodied_rename(git_user):
+    _write(git_user, 'main.bean', 'include "account/assets.bean"\n')
+    _write(git_user, 'account/assets.bean', '2000-01-01 open Assets:Old CNY\n')
     account = _create_account(git_user, 'Assets:Old')
 
     serializer = AccountSerializer(

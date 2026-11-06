@@ -81,18 +81,34 @@ def referenced_accounts(user):
     return set(build_account_index(user))
 
 
-def declared_accounts(user):
-    """账本中声明过 open 的账户集合"""
+def declared_state(user):
+    """账本中的 (已 open 账户, 已 close 账户) 集合，一次解析同时返回"""
     main_path = BeanFileManager.get_main_bean_path(user)
     if not os.path.isfile(main_path):
-        return set()
+        return set(), set()
 
     entries, _errors, _options = loader.load_file(main_path)
-    return {
+    opens = {
         entry.account
         for entry in entries
         if isinstance(entry, data.Open) and entry.account
     }
+    closes = {
+        entry.account
+        for entry in entries
+        if isinstance(entry, data.Close) and entry.account
+    }
+    return opens, closes
+
+
+def declared_accounts(user):
+    """账本中声明过 open 的账户集合"""
+    return declared_state(user)[0]
+
+
+def closed_accounts(user):
+    """账本中声明过 close 的账户集合"""
+    return declared_state(user)[1]
 
 
 def account_reference_count(user):

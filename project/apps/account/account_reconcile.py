@@ -1,4 +1,4 @@
-"""账本 → 平台账户的反向对账
+"""账本 → 平台账户的账户核对
 
 差集报告默认不改数据库：
 - ``ledger_only``：账本声明了 open，但平台完全没有该路径（含平台自动补的父账户记录）；
@@ -13,7 +13,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 
-from project.apps.account.ledger_refs import declared_accounts, referenced_accounts
+from project.apps.account.ledger_refs import declared_state, referenced_accounts
 from project.apps.account.ledger_sync import _is_git_user
 from project.apps.account.models import Account, is_valid_beancount_account_path
 from project.utils.file import BeanFileManager
@@ -43,7 +43,9 @@ def diff_ledger_accounts(user) -> dict:
             'matched': [],
         }
 
-    ledger_accounts = declared_accounts(user)
+    ledger_opens, ledger_closes = declared_state(user)
+    # 已 close 的账户不再视为「账本有」，避免删除后又被补齐
+    ledger_accounts = ledger_opens - ledger_closes
 
     db_accounts = set(
         Account.objects.filter(owner=user).values_list('account', flat=True)
@@ -109,7 +111,8 @@ def apply_pairings(user, pairs):
     if not _is_git_user(user):
         raise ValidationError("非 Git 用户请直接在平台改名")
 
-    ledger_accounts = declared_accounts(user)
+    ledger_opens, ledger_closes = declared_state(user)
+    ledger_accounts = ledger_opens - ledger_closes
     referenced = referenced_accounts(user)
     applied = []
 

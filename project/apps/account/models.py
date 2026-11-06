@@ -165,6 +165,15 @@ class Account(BaseModel):
             except Account.DoesNotExist:
                 pass
 
+        # 账本托管账户的币种以账本 open 为准，平台不允许修改
+        if currency_changed and self.owner_id:
+            from project.apps.account.custody import is_ledger_custodied
+
+            if is_ledger_custodied(self.owner, self):
+                raise ValidationError(
+                    "该账户由账本管理，币种以账本 open 为准，请在账本中修改"
+                )
+
         # 最后防线：serializer / clean 未校验时，补做一次账本冲突扫描
         needs_conflict_scan = (is_new_account and bool(self.currency)) or currency_changed
         if needs_conflict_scan and not getattr(self, '_currency_validated', False):
@@ -643,6 +652,16 @@ class Account(BaseModel):
         # 检查是否有子账户
         if self.has_children():
             raise ValidationError("存在子账户，无法删除。请先处理子账户")
+
+        # 账本托管账户必须先回到账本处理，避免平台删了又被同步补回
+        if self.owner_id:
+            from project.apps.account.custody import is_ledger_custodied
+
+            if is_ledger_custodied(self.owner, self):
+                raise ValidationError(
+                    "该账户由账本管理（用户区仍有 open 或引用），"
+                    "请先在账本中删除并同步，再清理平台记录"
+                )
 
         # 避免循环导入，使用字符串引用模型
         from django.apps import apps

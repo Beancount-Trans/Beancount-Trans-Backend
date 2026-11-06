@@ -8,22 +8,45 @@ from project.apps.account.models import Account, AccountTemplate, AccountTemplat
 _DUPLICATE_ACCOUNT_MSG = '该账户路径已存在，请勿重复添加'
 
 
+def _is_ledger_custodied(serializer, obj) -> bool:
+    """账户是否由账本托管；同一请求内复用账户索引，避免逐节点解析账本"""
+    from project.apps.account.custody import is_ledger_custodied
+
+    if not obj.owner_id:
+        return False
+
+    cache = serializer.context.setdefault('_custody_index', {})
+    if obj.owner_id not in cache:
+        from project.apps.account.ledger_refs import build_account_index
+
+        cache[obj.owner_id] = build_account_index(obj.owner)
+
+    return is_ledger_custodied(
+        obj.owner, obj, index=cache[obj.owner_id]
+    )
+
+
 class AccountTreeSerializer(serializers.ModelSerializer):
     """账户树形结构序列化器"""
     children = serializers.SerializerMethodField()
     parent_account = serializers.CharField(source='parent.account', read_only=True)
     account_type = serializers.CharField(source='get_account_type', read_only=True)
     mapping_count = serializers.SerializerMethodField()
+    is_ledger_custodied = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = [
             'id', 'account', 'parent', 'parent_account',
             'owner', 'enable', 'currency', 'account_type', 'mapping_count',
+            'is_ledger_custodied',
             'reconciliation_rule',
             'description', 'children', 'created', 'modified'
         ]
         read_only_fields = ['id', 'created', 'modified', 'owner']
+
+    def get_is_ledger_custodied(self, obj):
+        return _is_ledger_custodied(self, obj)
 
     def get_children(self, obj):
         """递归获取子账户"""
@@ -80,12 +103,14 @@ class AccountSerializer(serializers.ModelSerializer):
     has_children = serializers.BooleanField(read_only=True)
     mapping_count = serializers.SerializerMethodField()
     ledger_sync_warning = serializers.SerializerMethodField()
+    is_ledger_custodied = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = [
             'id', 'account', 'parent', 'parent_account',
             'owner', 'enable', 'currency', 'account_type', 'has_children', 'mapping_count',
+            'is_ledger_custodied',
             'reconciliation_rule',
             'description', 'ledger_sync_warning', 'created', 'modified'
         ]
@@ -93,6 +118,9 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def get_ledger_sync_warning(self, obj):
         return getattr(obj, 'ledger_sync_warning', None)
+
+    def get_is_ledger_custodied(self, obj):
+        return _is_ledger_custodied(self, obj)
 
     def validate_reconciliation_rule(self, value):
         """校验对账周期规则（受控自然语言 DSL）"""

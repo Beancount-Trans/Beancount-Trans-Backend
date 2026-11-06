@@ -1,4 +1,4 @@
-"""非 Git 用户的账户改名
+"""账户改名
 
 平台只改写自己可管理的账本文件（``trans/`` 与非 Git 的历史月度文件），
 不触碰 ``main.bean`` / ``account/**``。流程：
@@ -8,8 +8,9 @@
 3. 校验通过后在同一事务内更新账户及其子账户；
 4. 任一步失败都恢复文件快照。
 
-Git 用户不允许在平台直接改名：其账本以远端为准，应先在账本中改名，
-同步后再通过反向对账确认。
+Git 用户按托管态决定：
+- 平台区托管（用户区没有该账户的 ``open`` 或引用）→ 允许平台改名；
+- 账本托管 → 拒绝，应在账本中改名，同步后再通过反向对账确认。
 """
 import logging
 import os
@@ -113,12 +114,17 @@ def _error_counter(user):
 
 
 def rename_account(account, new_name) -> RenameResult:
-    """改名并同步平台区账本；仅适用于非 Git 用户"""
+    """改名并同步平台区账本；Git 用户仅允许平台区托管的账户"""
     if _is_git_user(account.owner):
-        raise ValidationError(
-            "Git 用户的账本以远端仓库为准，请在账本中完成改名并同步，"
-            "再在平台中确认账户对账结果"
-        )
+        from project.apps.account.custody import ledger_custody_files
+
+        evidence = ledger_custody_files(account.owner, account)
+        if evidence:
+            raise ValidationError(
+                "该账户由账本管理（用户区已有 open 或引用："
+                f"{', '.join(evidence)}）；请在账本中改名并同步，"
+                "再用「账户核对」确认配对"
+            )
 
     _validate_new_name(account, new_name)
 

@@ -1,4 +1,4 @@
-"""账本 → 平台账户对账报告命令
+"""账本 → 平台账户核对报告命令
 
 用法：
     python manage.py reconcile_ledger_accounts --user <username>

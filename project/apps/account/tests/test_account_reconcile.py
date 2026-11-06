@@ -147,6 +147,37 @@ def _write_simple_ledger(user, content):
     _write(user, 'collect.bean', content)
 
 
+def test_closed_account_is_not_reported_as_ledger_only(user):
+    """账本已 close 的账户不再算「账本有」，避免删除后又被补齐。"""
+    _create_account(user, 'Assets:Bank')
+    _write_simple_ledger(
+        user,
+        '2000-01-01 open Assets:Closed CNY\n'
+        '2005-01-01 close Assets:Closed\n',
+    )
+
+    result = diff_ledger_accounts(user)
+
+    assert result['ledger_only'] == []
+
+
+def test_import_skips_closed_accounts(git_user):
+    """自动补齐不导入账本已 close 的账户。"""
+    _write_simple_ledger(
+        git_user,
+        '2000-01-01 open Assets:Open CNY\n'
+        '2000-01-01 open Assets:Closed CNY\n'
+        '2005-01-01 close Assets:Closed\n',
+    )
+
+    from project.apps.account.account_reconcile import import_declared_accounts
+
+    result = import_declared_accounts(git_user)
+
+    assert result['created'] == ['Assets:Open']
+    assert not Account.objects.filter(owner=git_user, account='Assets:Closed').exists()
+
+
 def test_apply_pairings_updates_platform_accounts(git_user):
     _create_account(git_user, 'Assets:Old')
     _write_simple_ledger(git_user, '2000-01-01 open Assets:New CNY\n')
