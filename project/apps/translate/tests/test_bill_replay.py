@@ -17,6 +17,13 @@ from django.apps import apps as django_apps
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 
+from project.apps.account.models import Account
+from project.apps.external_accounts.models import (
+    ExternalAccount,
+    ExternalAccountBinding,
+    Institution,
+    InstrumentKind,
+)
 from project.apps.translate.models import FormatConfig
 from project.apps.translate.services.analyze_service import AnalyzeService
 
@@ -45,11 +52,30 @@ def _seed_institutions():
     module.seed_institutions(django_apps, None)
 
 
-def _replay(user, csv_path: Path):
+def _seed_citic_credit(user):
+    """预置中信信用卡身份，验证未写卡类型时也能按既有身份命中。"""
+    institution = Institution.objects.get(code='CITIC')
+    account = Account.objects.create(
+        account='Liabilities:CreditCard:Bank:CITIC:C6428', owner=user
+    )
+    external = ExternalAccount.objects.create(
+        owner=user,
+        institution=institution,
+        kind=InstrumentKind.CREDIT_CARD,
+        tail='6428',
+    )
+    ExternalAccountBinding.objects.create(
+        owner=user, external_account=external, account=account
+    )
+
+
+def _replay(user, csv_path: Path, seed_citic_credit: bool = False):
     """用官方模板初始化用户并解析真实样例账单。"""
     _seed_institutions()
     call_command('init_official_templates', verbosity=0)
     call_command('apply_templates_to_users', user_ids=str(user.id), verbosity=0)
+    if seed_citic_credit:
+        _seed_citic_credit(user)
 
     uploaded = SimpleUploadedFile(
         csv_path.name, csv_path.read_bytes(), content_type='text/csv'
@@ -89,7 +115,7 @@ class TestAlipayReplay:
 @pytest.mark.django_db
 class TestWechatReplay:
     def test_sample_resolves_payment_methods(self, user, temp_assets):
-        context = _replay(user, WECHAT_CSV)
+        context = _replay(user, WECHAT_CSV, seed_citic_credit=True)
 
         assert context['status'] != 'error', context.get('errors')
         entries = [entry for entry in context['formatted_data'] if entry.get('formatted')]

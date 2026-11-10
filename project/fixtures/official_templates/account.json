@@ -1,8 +1,8 @@
 {
   "name": "中国用户标准账户模板",
   "description": "适用于中国用户的标准 Beancount 账户结构",
-  "version": "1.0.0",
-  "update_notes": null,
+  "version": "2.0.0",
+  "update_notes": "移除具体银行卡与运营商卡尾号，补齐购物父账户与小荷包；银行卡账户改由解析自动补齐或用户自建",
   "items": [
     {
       "account_path": "Assets",
@@ -35,18 +35,6 @@
       "description": ""
     },
     {
-      "account_path": "Assets:Savings:Bank:BOC",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Savings:Bank:BOC:C0814",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
       "account_path": "Assets:Savings:Cash",
       "enable": true,
       "reconciliation_rule": null,
@@ -71,31 +59,13 @@
       "description": ""
     },
     {
-      "account_path": "Assets:Savings:Recharge:Operator:Mobile:C6428",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
       "account_path": "Assets:Savings:Recharge:Operator:Telecom",
       "enable": true,
       "reconciliation_rule": null,
       "description": ""
     },
     {
-      "account_path": "Assets:Savings:Recharge:Operator:Telecom:C6428",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
       "account_path": "Assets:Savings:Recharge:Operator:Unicom",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Savings:Recharge:Operator:Unicom:C6428",
       "enable": true,
       "reconciliation_rule": null,
       "description": ""
@@ -129,6 +99,12 @@
       "enable": true,
       "reconciliation_rule": null,
       "description": "支付宝余额"
+    },
+    {
+      "account_path": "Assets:Savings:Web:XiaoHeBao",
+      "enable": true,
+      "reconciliation_rule": null,
+      "description": "支付宝小荷包"
     },
     {
       "account_path": "Assets:Savings:Web:WechatFund",
@@ -293,6 +269,12 @@
       "description": "公共事业(水/电/气/网/物业/物流等)"
     },
     {
+      "account_path": "Expenses:Shopping",
+      "enable": true,
+      "reconciliation_rule": null,
+      "description": "购物"
+    },
+    {
       "account_path": "Expenses:Shopping:Clothing",
       "enable": true,
       "reconciliation_rule": null,
@@ -432,18 +414,6 @@
     },
     {
       "account_path": "Liabilities:CreditCard:Bank",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Bank:CITIC",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Bank:CITIC:C6428",
       "enable": true,
       "reconciliation_rule": null,
       "description": ""

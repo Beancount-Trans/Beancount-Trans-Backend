@@ -427,8 +427,8 @@ class AccountTemplateViewSet(ModelViewSet):
         }
 
         if action_type == 'overwrite':
-            # 删除用户现有的所有账户
-            Account.objects.filter(owner=user).delete()
+            # 删除用户现有的所有账户（外部绑定与 parent 对 Account 是 PROTECT）
+            self._purge_user_accounts(user)
             # 直接创建所有模板账户，无需检查冲突
             for item in template.items.all():
                 # Beancount 不允许根账户，模板中的根账户只作分组
@@ -456,7 +456,7 @@ class AccountTemplateViewSet(ModelViewSet):
                         result['skipped'] += 1
                         continue
                     elif conflict_resolution == 'overwrite':
-                        existing.delete()
+                        self._delete_single_account(existing)
                         result['overwritten'] += 1
 
                 # 创建新账户（Account.save() 会自动创建父账户）
@@ -470,3 +470,21 @@ class AccountTemplateViewSet(ModelViewSet):
                 result['created'] += 1
 
         return result
+
+    @staticmethod
+    def _purge_user_accounts(user):
+        """清空用户全部账户：外部绑定与 parent 对 Account 是 PROTECT，删除前需先解除。"""
+        from project.apps.external_accounts.models import ExternalAccount
+
+        ExternalAccount.objects.filter(owner=user).delete()
+        Account.objects.filter(owner=user).update(parent=None)
+        Account.objects.filter(owner=user).delete()
+
+    @staticmethod
+    def _delete_single_account(account):
+        """删除单个账户，先解除外部绑定与子账户的 parent 引用。"""
+        from project.apps.external_accounts.models import ExternalAccountBinding
+
+        ExternalAccountBinding.objects.filter(account=account).delete()
+        Account.objects.filter(parent=account).update(parent=None)
+        account.delete()

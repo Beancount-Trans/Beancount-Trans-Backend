@@ -1,23 +1,9 @@
 {
   "name": "官方资产映射",
   "description": "中国用户常用资产映射",
-  "version": "1.1.0",
-  "update_notes": "移除账户描述，改为结构化外部身份",
+  "version": "2.0.0",
+  "update_notes": "移除具体银行卡与歧义别名 /；银行卡账户改由解析自动补齐或用户自建",
   "items": [
-    {
-      "key": "0814",
-      "account": "Assets:Savings:Bank:BOC:C0814",
-      "institution_code": "BOC",
-      "external_kind": "debit_card",
-      "tail": "0814"
-    },
-    {
-      "key": "6428",
-      "account": "Liabilities:CreditCard:Bank:CITIC:C6428",
-      "institution_code": "CITIC",
-      "external_kind": "credit_card",
-      "tail": "6428"
-    },
     {
       "key": "零钱通",
       "account": "Assets:Savings:Web:WechatFund",
@@ -28,14 +14,6 @@
     },
     {
       "key": "零钱",
-      "account": "Assets:Savings:Web:WechatPay",
-      "institution_code": "WECHAT",
-      "external_kind": "wallet",
-      "slot": "wechat_pay",
-      "display_name": "微信零钱"
-    },
-    {
-      "key": "/",
       "account": "Assets:Savings:Web:WechatPay",
       "institution_code": "WECHAT",
       "external_kind": "wallet",

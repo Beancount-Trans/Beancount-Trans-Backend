@@ -250,3 +250,56 @@ def load_all_official_templates_data() -> dict[str, Any]:
         "mapping_assets": load_official_mapping_data("assets"),
         "tag": load_official_tag_data(),
     }
+
+
+def validate_official_template_closure(
+    account_data: Optional[dict],
+    mapping_data: dict[str, Optional[dict]],
+) -> list[str]:
+    """校验映射模板引用的账户都存在于账户模板，且模板内部 key 唯一。
+
+    返回错误列表；空列表表示通过。
+    """
+    errors: list[str] = []
+    if not account_data:
+        return ["account.json 缺失或无效"]
+
+    account_paths = {
+        item["account_path"].strip()
+        for item in account_data.get("items", [])
+        if item.get("account_path")
+    }
+    if not account_paths:
+        errors.append("account.json 没有有效账户")
+
+    for template_type, data in mapping_data.items():
+        if not data:
+            errors.append(f"{template_type} 模板缺失或无效")
+            continue
+
+        seen_keys: set[str] = set()
+        for item in data.get("items", []):
+            key = (item.get("key") or "").strip()
+            if not key:
+                errors.append(f"{template_type}: 存在空 key")
+                continue
+            if key in seen_keys:
+                errors.append(f"{template_type}: key 重复「{key}」")
+            seen_keys.add(key)
+
+            account = (item.get("account") or "").strip()
+            if account and account not in account_paths:
+                errors.append(
+                    f"{template_type}: 「{key}」引用账户不存在 {account}"
+                )
+
+            if template_type == "assets":
+                tail = str(item.get("tail") or "").strip()
+                institution_code = (item.get("institution_code") or "").strip()
+                external_kind = (item.get("external_kind") or "").strip()
+                if tail and (not institution_code or not external_kind):
+                    errors.append(
+                        f"assets: 「{key}」有尾号但缺少机构或卡类型"
+                    )
+
+    return errors

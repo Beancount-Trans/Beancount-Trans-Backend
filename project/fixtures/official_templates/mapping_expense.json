@@ -1,8 +1,8 @@
 {
   "name": "官方支出映射",
   "description": "中国用户常用支出映射",
-  "version": "1.0.1",
-  "update_notes": "示例账单故事化：新增社保/美年/知乎/奇莫/维修映射；房租/物业费/订阅/会员/88VIP/全民K歌/王者荣耀/体检补标签",
+  "version": "1.0.2",
+  "update_notes": "移除用户特定与特定银行卡账户引用，运营商充值改指基础账户",
   "items": [
     {
       "key": "高跟鞋",
@@ -380,13 +380,13 @@
     {
       "key": "电信",
       "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Telecom:C6428",
+      "account": "Assets:Savings:Recharge:Operator:Telecom",
       "currency": "COIN"
     },
     {
       "key": "中国移动",
       "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Mobile:C6428",
+      "account": "Assets:Savings:Recharge:Operator:Mobile",
       "currency": "COIN",
       "tags": [
         "Online"
@@ -395,7 +395,7 @@
     {
       "key": "浙江移动",
       "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Mobile:C6428",
+      "account": "Assets:Savings:Recharge:Operator:Mobile",
       "currency": "COIN",
       "tags": [
         "Online"
@@ -445,12 +445,6 @@
       "payee": "",
       "account": "Expenses:Culture:Entertainment",
       "currency": ""
-    },
-    {
-      "key": "老婆大人",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:LaoPoDaRen",
-      "currency": "COIN"
     },
     {
       "key": "南极人",
@@ -804,12 +798,6 @@
       "currency": ""
     },
     {
-      "key": "粮粮驾到",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:LiangLiangJiaDao",
-      "currency": "COIN"
-    },
-    {
       "key": "会员",
       "payee": "",
       "account": "Expenses:Culture:Subscription",
@@ -841,18 +829,6 @@
       "key": "酒店",
       "payee": "",
       "account": "Expenses:Culture:Travel",
-      "currency": ""
-    },
-    {
-      "key": "舒活食品",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:YiMing",
-      "currency": "COIN"
-    },
-    {
-      "key": "抖音月付",
-      "payee": "",
-      "account": "Liabilities:CreditCard:Web:DouYin",
       "currency": ""
     },
     {
@@ -1257,7 +1233,7 @@
     {
       "key": "联通",
       "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Unicom:C6428",
+      "account": "Assets:Savings:Recharge:Operator:Unicom",
       "currency": "COIN"
     },
     {
@@ -1277,12 +1253,6 @@
       "payee": "",
       "account": "Assets:Receivables:Personal",
       "currency": ""
-    },
-    {
-      "key": "六贤记",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:LiuXianJi",
-      "currency": "COIN"
     },
     {
       "key": "服饰",
@@ -1841,12 +1811,6 @@
       "payee": "",
       "account": "Expenses:Shopping:Digital",
       "currency": null
-    },
-    {
-      "key": "中信银行",
-      "payee": "",
-      "account": "Liabilities:CreditCard:Bank:CITIC:C6428",
-      "currency": ""
     },
     {
       "key": "护肤品",
@@ -3443,7 +3407,7 @@
     {
       "key": "中国电信",
       "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Telecom:C6428",
+      "account": "Assets:Savings:Recharge:Operator:Telecom",
       "currency": "COIN"
     },
     {
@@ -3712,12 +3676,6 @@
       "payee": "",
       "account": "Expenses:Shopping:Daily",
       "currency": null
-    },
-    {
-      "key": "温粥人",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:WenZhouRen",
-      "currency": "COIN"
     },
     {
       "key": "手续费",

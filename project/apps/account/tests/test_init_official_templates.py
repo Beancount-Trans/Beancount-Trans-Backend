@@ -9,13 +9,14 @@
 """
 import os
 import json
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from io import BytesIO
 
 import django
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, SimpleTestCase
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.contrib.auth import get_user_model
@@ -31,7 +32,9 @@ from project.apps.translate.models import FormatConfig
 from project.apps.account.management.commands.official_templates_loader import (
     load_official_account_data,
     load_official_mapping_data,
-    get_official_templates_dir
+    load_all_official_templates_data,
+    get_official_templates_dir,
+    validate_official_template_closure,
 )
 
 User = get_user_model()
@@ -615,4 +618,47 @@ class TestInitOfficialTemplates(TransactionTestCase):
                 self.assertEqual(template_item.account, json_item.get('account') or None)
                 self.assertEqual(template_item.payee, json_item.get('payee') or None)
                 self.assertEqual(template_item.currency, json_item.get('currency') or None)
+
+
+class TestOfficialTemplateConsistency(SimpleTestCase):
+    """官方模板数据一致性约束。"""
+
+    def test_no_concrete_card_tail_accounts(self):
+        account_data = load_official_account_data()
+        card_tails = [
+            item['account_path']
+            for item in account_data['items']
+            if re.search(r':C\d{4}$', item['account_path'])
+        ]
+        self.assertEqual(card_tails, [])
+
+    def test_asset_template_has_no_card_tail(self):
+        assets_data = load_official_mapping_data('assets')
+        tails = [item.get('tail') for item in assets_data['items'] if item.get('tail')]
+        self.assertEqual(tails, [])
+
+    def test_mapping_accounts_exist_in_account_template(self):
+        data = load_all_official_templates_data()
+        errors = validate_official_template_closure(
+            data.get('account'),
+            {
+                'expense': data.get('mapping_expense'),
+                'income': data.get('mapping_income'),
+                'assets': data.get('mapping_assets'),
+            },
+        )
+        self.assertEqual(errors, [])
+
+    def test_validator_reports_missing_account(self):
+        account_data = {
+            'items': [{'account_path': 'Expenses:Other'}],
+        }
+        mapping_data = {
+            'expense': {
+                'items': [{'key': '测试', 'account': 'Expenses:Missing'}],
+            },
+        }
+        errors = validate_official_template_closure(account_data, mapping_data)
+        self.assertTrue(errors)
+        self.assertIn('Expenses:Missing', errors[0])
 

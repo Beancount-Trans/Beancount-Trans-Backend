@@ -210,7 +210,9 @@ class Command(BaseCommand):
                 return result
             elif force:
                 if not dry_run:
-                    # 删除现有数据
+                    # 删除现有数据；外部账户绑定与 parent 对 Account 是 PROTECT，需先清空
+                    ExternalAccount.objects.filter(owner=user).delete()
+                    Account.objects.filter(owner=user).update(parent=None)
                     Account.objects.filter(owner=user).delete()
                     Tag.objects.filter(owner=user).delete()
                     Expense.objects.filter(owner=user).delete()

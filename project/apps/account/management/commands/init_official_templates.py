@@ -7,7 +7,9 @@ from project.apps.account.management.commands.official_templates_loader import (
     load_official_account_data,
     load_official_mapping_data,
     load_official_tag_data,
+    load_all_official_templates_data,
     normalize_mapping_tag_paths,
+    validate_official_template_closure,
 )
 from project.apps.maps.models import Template, TemplateItem
 from project.apps.tags.models import Tag, TagTemplate, TagTemplateItem
@@ -38,6 +40,9 @@ class Command(BaseCommand):
         force = options.get('force', False)
 
         self.stdout.write(self.style.SUCCESS('开始初始化官方模板和默认用户...'))
+
+        # 0. 先做跨模板一致性校验，避免带着缺失账户/重复 key 写入数据库
+        self._validate_official_templates()
 
         # 1. 检查并创建 id=1 的 admin 用户
         admin_user = self._ensure_admin_user(skip_admin)
@@ -72,6 +77,21 @@ class Command(BaseCommand):
         self._create_sample_files_for_admin(admin_user)
 
         self.stdout.write(self.style.SUCCESS('✓ 官方模板和默认用户初始化完成'))
+
+    def _validate_official_templates(self):
+        """跨模板校验：映射引用账户必须存在，模板内 key 不得重复。"""
+        data = load_all_official_templates_data()
+        mapping_data = {
+            'expense': data.get('mapping_expense'),
+            'income': data.get('mapping_income'),
+            'assets': data.get('mapping_assets'),
+        }
+        errors = validate_official_template_closure(data.get('account'), mapping_data)
+        if errors:
+            raise CommandError(
+                '官方模板一致性校验失败:\n'
+                + '\n'.join(f'  - {error}' for error in errors)
+            )
 
     def _ensure_admin_user(self, skip_admin):
         """确保 id=1 的 admin 用户存在"""

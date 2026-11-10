@@ -5,6 +5,9 @@ from unittest.mock import patch
 import pytest
 
 from project.apps.account.models import Account
+from project.apps.account.management.commands.official_templates_loader import (
+    load_official_mapping_data,
+)
 from project.apps.external_accounts.models import (
     ExternalAccount,
     ExternalAccountAlias,
@@ -16,6 +19,7 @@ from project.apps.external_accounts.models import (
 )
 from project.apps.maps.models import Assets, Expense
 from project.apps.translate.services.asset_provisioning import (
+    SLOT_ACCOUNT_PATHS,
     provision_asset_account,
     provision_missing_asset_accounts,
 )
@@ -122,13 +126,12 @@ class TestProvisionAssetAccount:
         assert ExternalAccountBinding.objects.filter(owner=user, account__account=result.account).exists()
         assert not Assets.objects.filter(owner=user).exists()
 
-    def test_kindless_card_defaults_to_debit(self, user, institutions, own_mappings):
+    def test_kindless_card_without_history_is_skipped(self, user, institutions, own_mappings):
         result = provision_asset_account(user.id, '中信银行(6428)', bill='alipay')
 
-        assert result is not None
-        assert result.account == 'Assets:Savings:Bank:CITIC:C6428'
-        external = ExternalAccount.objects.get(owner=user, tail='6428')
-        assert external.kind == InstrumentKind.DEBIT_CARD
+        assert result is None
+        assert not Account.objects.filter(owner=user, account__endswith=':C6428').exists()
+        assert not ExternalAccount.objects.filter(owner=user, tail='6428').exists()
 
     def test_kindless_card_reuses_existing_credit_kind(self, user, institutions, own_mappings):
         citic = Institution.objects.get(code='CITIC')
@@ -182,6 +185,17 @@ class TestProvisionAssetAccount:
         result = alipay_get_expense_account(handler, get_default_assets(user.id), user.id)
 
         assert result == ASSETS_OTHER
+
+
+def test_slot_paths_match_official_asset_template():
+    data = load_official_mapping_data('assets')
+    template_slots = {
+        item['slot']: item['account']
+        for item in data['items']
+        if item.get('slot')
+    }
+
+    assert template_slots == SLOT_ACCOUNT_PATHS
 
 
 def _alipay_row(**overrides):

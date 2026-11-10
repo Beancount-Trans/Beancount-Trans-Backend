@@ -74,7 +74,7 @@ def _account_path_for(kind: str, hint) -> str:
 
 
 def _resolve_card_kind(owner_id: int, institution: Institution, tail: str, hinted_kind: str) -> str:
-    """确定卡类型：账单写明就用；没写时复用已有身份，未知则按储蓄卡兜底。"""
+    """确定卡类型：账单写明就用；没写时只复用已有身份，不猜。"""
     if hinted_kind:
         return hinted_kind
     kinds = set(
@@ -84,11 +84,8 @@ def _resolve_card_kind(owner_id: int, institution: Institution, tail: str, hinte
     )
     if len(kinds) == 1:
         return kinds.pop()
-    if kinds:
-        # 同一机构同一尾号同时存在储蓄卡与信用卡，无法判断
-        return ''
-    # 微信/支付宝常省略「储蓄卡」，缺省按借记卡落账，用户可在账户管理里改
-    return InstrumentKind.DEBIT_CARD
+    # 无历史身份或同一尾号存在多种卡类型时保留 Assets:Other，避免把信用卡记成资产
+    return ''
 
 
 def _ensure_account(owner_id: int, path: str) -> tuple[Optional[Account], bool]:
@@ -173,7 +170,7 @@ def provision_asset_account(owner_id: int, text: str, bill: str = '') -> Optiona
     """按付款方式补齐资产账户、外部账户身份与资产映射。
 
     返回可用的账本账户路径；线索不足或账户已被停用时返回 ``None``。
-    银行卡未写卡类型时，优先复用同机构同尾号的已有身份，否则按储蓄卡兜底。
+    银行卡未写卡类型时，只复用同机构同尾号的已有身份，否则不创建。
     """
     text = (text or '').strip()
     if not text:
