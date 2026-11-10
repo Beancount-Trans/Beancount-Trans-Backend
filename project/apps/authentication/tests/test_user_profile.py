@@ -261,6 +261,48 @@ class TestUserProfile:
         # 验证profile已删除
         assert not UserProfile.objects.filter(user_id=user_id).exists()
 
+    def test_delete_account_with_external_binding(self):
+        """注销账户时应先清理外部账户绑定（Account 上的 PROTECT 约束）"""
+        from project.apps.account.models import Account
+        from project.apps.external_accounts.models import (
+            ExternalAccount,
+            ExternalAccountAlias,
+            ExternalAccountBinding,
+            Institution,
+            InstrumentKind,
+        )
+        from project.apps.maps.models import Assets
+
+        account = Account.objects.create(
+            account='Assets:Savings:Web:AliPay', owner=self.user
+        )
+        institution = Institution.objects.create(
+            code='ALIPAY', name='支付宝', is_platform=True
+        )
+        external = ExternalAccount.objects.create(
+            owner=self.user,
+            institution=institution,
+            kind=InstrumentKind.WALLET,
+            slot='alipay_balance',
+            display_name='支付宝余额',
+        )
+        ExternalAccountBinding.objects.create(
+            owner=self.user, external_account=external, account=account
+        )
+        ExternalAccountAlias.objects.create(
+            owner=self.user, external_account=external, text='余额'
+        )
+        Assets.objects.create(key='余额', assets=account, owner=self.user)
+
+        user_id = self.user.id
+        self.client.force_authenticate(user=self.user)
+        response = self.client.delete('/api/auth/profile/delete_account/')
+
+        assert response.status_code == 200
+        assert not User.objects.filter(id=user_id).exists()
+        assert not Account.objects.filter(owner_id=user_id).exists()
+        assert not ExternalAccount.objects.filter(owner_id=user_id).exists()
+
     def test_delete_account_with_related_data(self):
         """测试删除账户时清理关联数据"""
         from django.apps import apps

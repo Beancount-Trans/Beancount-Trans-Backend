@@ -9,6 +9,12 @@ from django.test import TestCase
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from project.apps.account.models import Account
+from project.apps.external_accounts.models import (
+    ExternalAccount,
+    ExternalAccountBinding,
+    Institution,
+    InstrumentKind,
+)
 from project.apps.maps.models import Expense, Assets, Income
 
 
@@ -184,6 +190,51 @@ class AccountDeleteMigrationTest(TestCase):
 
         with self.assertRaises(ValidationError):
             self.source_account.delete_with_migration(migrate_to=self.target_account)
+
+
+class AccountDeleteExternalBindingTest(TestCase):
+    """删除带外部账户绑定的账户不应被 PROTECT 阻断。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='bindinguser', password='testpass123'
+        )
+        self.source = Account.objects.create(
+            account='Assets:Savings:Bank:CMB:C8837', owner=self.user
+        )
+        self.target = Account.objects.create(
+            account='Assets:Savings:Bank:CMB:C6428', owner=self.user
+        )
+        institution = Institution.objects.create(code='CMB', name='招商银行')
+        self.external = ExternalAccount.objects.create(
+            owner=self.user,
+            institution=institution,
+            kind=InstrumentKind.DEBIT_CARD,
+            tail='8837',
+        )
+        self.binding = ExternalAccountBinding.objects.create(
+            owner=self.user, external_account=self.external, account=self.source
+        )
+
+    def test_delete_moves_binding_to_migration_target(self):
+        Assets.objects.create(
+            key='招商银行储蓄卡(8837)', assets=self.source, owner=self.user
+        )
+
+        self.source.delete_with_migration(migrate_to=self.target)
+
+        self.assertFalse(Account.objects.filter(id=self.source.id).exists())
+        self.binding.refresh_from_db()
+        self.assertEqual(self.binding.account_id, self.target.id)
+
+    def test_delete_without_target_removes_binding(self):
+        self.source.delete_with_migration()
+
+        self.assertFalse(Account.objects.filter(id=self.source.id).exists())
+        self.assertFalse(
+            ExternalAccountBinding.objects.filter(external_account=self.external).exists()
+        )
+        self.assertTrue(ExternalAccount.objects.filter(id=self.external.id).exists())
 
 
 class AccountCloseTest(TestCase):

@@ -716,6 +716,7 @@ class Account(BaseModel):
 
         # 删除账户（先同步账本 close，保留历史）
         self._sync_ledger_close()
+        self._release_external_binding(migrate_to=migrate_to)
 
         account_id = self.id
         account_name = self.account
@@ -727,6 +728,33 @@ class Account(BaseModel):
         }
 
         return result
+
+    def _release_external_binding(self, migrate_to=None):
+        """删除账户前释放外部账户绑定。
+
+        ``ExternalAccountBinding.account`` 是 PROTECT：解析自动补齐资产账户后，
+        账户会带一对一绑定，直接删账户会抛 ProtectedError。有迁移目标且目标
+        未被占用时把绑定改指目标，否则移除绑定（外部身份保留，可由后续解析复用）。
+        """
+        from project.apps.external_accounts.models import ExternalAccountBinding
+
+        binding = (
+            ExternalAccountBinding.objects.filter(account=self)
+            .select_related('external_account')
+            .first()
+        )
+        if binding is None:
+            return
+
+        target_free = (
+            migrate_to is not None
+            and not ExternalAccountBinding.objects.filter(account=migrate_to).exists()
+        )
+        if target_free:
+            binding.account = migrate_to
+            binding.save(update_fields=['account', 'modified'])
+            return
+        binding.delete()
 
     def has_reconciliation_cycle(self) -> bool:
         """检查是否配置了对账周期规则"""

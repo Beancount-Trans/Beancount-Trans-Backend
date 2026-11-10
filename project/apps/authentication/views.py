@@ -17,6 +17,7 @@ from allauth.socialaccount.models import SocialAccount
 
 from project.apps.authentication.models import PersonalAccessToken, UserProfile
 from project.apps.authentication.utils import generate_unique_username, extract_local_phone_number
+from project.apps.external_accounts.models import ExternalAccount
 from project.apps.fava_instances.tasks import schedule_fava_warmup
 from project.apps.authentication.serializers import (
     PhoneSendCodeSerializer,
@@ -940,7 +941,10 @@ class UserProfileViewSet(viewsets.GenericViewSet):
                 # 在删除账户之前，需要先清除所有账户的 parent 引用
                 # 因为 parent 字段使用 PROTECT 约束，必须先清除引用才能删除
                 Account.objects.filter(owner=user).update(parent=None)
-                
+
+                # 外部账户绑定对 Account 是 PROTECT；删除外部账户会级联别名与绑定
+                ExternalAccount.objects.filter(owner=user).delete()
+
                 # 现在可以安全地删除所有账户
                 Account.objects.filter(owner=user).delete()
                 Expense.objects.filter(owner=user).delete()
