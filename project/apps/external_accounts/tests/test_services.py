@@ -1,3 +1,4 @@
+import importlib
 import os
 
 import django
@@ -5,6 +6,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'project.settings.test')
 django.setup()
 
+from django.apps import apps as django_apps
 from django.test import TestCase
 
 from project.apps.external_accounts.models import Institution, InstitutionAlias
@@ -48,3 +50,30 @@ class MatchInstitutionTest(TestCase):
     def test_unknown_returns_none(self):
         self.assertIsNone(match_institution('不存在的银行'))
         self.assertIsNone(match_institution(''))
+
+
+class SeedMoreInstitutionsTest(TestCase):
+    """补充机构种子数据后，常见银行写法应能归一。"""
+
+    def setUp(self):
+        for name in ('0002_seed_institutions', '0005_seed_more_institutions'):
+            module = importlib.import_module(
+                f'project.apps.external_accounts.migrations.{name}'
+            )
+            module.seed_institutions(django_apps, None)
+
+    def test_rural_commercial_bank_aliases(self):
+        self.assertEqual(match_institution('农商银行储蓄卡(4444)').code, 'RCB')
+        self.assertEqual(match_institution('农村商业银行信用卡(1234)').code, 'RCB')
+        self.assertEqual(match_institution('上海农商银行储蓄卡(5678)').code, 'RCB')
+        self.assertEqual(match_institution('农信社储蓄卡(9012)').code, 'RCB')
+
+    def test_city_commercial_banks(self):
+        self.assertEqual(match_institution('上海银行储蓄卡(1234)').code, 'BOS')
+        self.assertEqual(match_institution('北京银行信用卡(5678)').code, 'BOB')
+        self.assertEqual(match_institution('宁波银行储蓄卡(8837)').code, 'NBCB')
+        self.assertEqual(match_institution('温州银行储蓄卡(4321)').code, 'WZB')
+
+    def test_internet_banks(self):
+        self.assertEqual(match_institution('微众银行储蓄卡(1234)').code, 'WEBANK')
+        self.assertEqual(match_institution('网商银行储蓄卡(5678)').code, 'MYBANK')
