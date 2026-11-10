@@ -33,7 +33,7 @@ project/fixtures/
 **通用结构**：顶层含 `name`, `description`, `version`, `update_notes`；`items` 为数组。
 
 - **account.json**：每项 `account_path`（必填）、`enable`、`reconciliation_rule`（受控自然语言循环规则，可空）、`description`（可选）。
-- **mapping_*.json**：每项含 `key`、`account` 等，支出/收入另有 `payee`/`payer`（可选，需脱敏），资产另有 `full`。
+- **mapping_*.json**：每项含 `key`、`account` 等，支出/收入另有 `payee`/`payer`（可选，需脱敏）。资产项用结构化身份描述账户：`institution_code`、`external_kind`、`tail`、`slot`、`display_name`（可选）。
 
 缺失或校验失败时，`init_official_templates` 会报错并中止。
 

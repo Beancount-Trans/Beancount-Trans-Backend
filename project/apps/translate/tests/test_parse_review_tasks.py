@@ -592,13 +592,15 @@ class TestAutoConfirmExpiredCopilotEntries:
 
     def test_not_expired_copilot_keeps_staging(self, user, entry_review_task, temp_assets):
         _create_copilot_entries(user)
+        # 建账户本身会写入 open/note，这里比较任务执行前后账本是否被追加内容
+        before = _collect_text(user) or ''
 
         result = auto_confirm_expired_entry_reviews()
 
         assert result == {'confirmed_count': 0, 'error_count': 0}
         assert CopilotBookkeepingService.has_staging(user.id) is True
         assert len(EntryReviewQueueService.list_refs(user.id)) == 1
-        assert COPILOT_EXPENSE_ACCOUNT not in (_collect_text(user) or '')
+        assert (_collect_text(user) or '') == before
         entry_review_task.refresh_from_db()
         assert entry_review_task.status == 'pending'
 

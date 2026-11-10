@@ -112,21 +112,9 @@ def cmb_credit_init_key(data):
 
 
 def cmb_credit_get_account(self, ownerid):
-    key = self.key
-    if key in self.key_list:
-        account_instance = self.find_asset_by_key(key)
-        if account_instance and account_instance.assets:
-            return extract_account_string(account_instance.assets)
-        return ASSETS_OTHER
-    elif '(' in key and ')' in key:
-        digits = key.split('(')[1].split(')')[0]  # 提取 account 中的数字部分，例如中信银行信用卡(6428) -> 6428
-        if digits in self.key_list:  # 判断提取到的数字是否在列表中
-            account_instance = self.find_asset_by_key(digits)
-            if account_instance and account_instance.assets:
-                return extract_account_string(account_instance.assets)
-            return ASSETS_OTHER
-        else:
-            return ASSETS_OTHER  # 提取到的数字不在列表中，说明该账户不在数据库中，需要手动对账
-    return ASSETS_OTHER
+    from project.apps.translate.services.account_resolution import resolve_account_from_text
+
+    result = resolve_account_from_text(ownerid, self.key, bill=self.bill)
+    return result.account if result.ok else ASSETS_OTHER
 
 # IgnoreData.cmb_credit_ignore = cmb_credit_ignore

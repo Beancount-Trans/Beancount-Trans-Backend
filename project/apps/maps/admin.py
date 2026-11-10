@@ -17,7 +17,7 @@ def _format_tags(tags) -> str:
 class TemplateItemInline(admin.TabularInline):
     model = TemplateItem
     extra = 0
-    fields = ('key', 'account', 'payee', 'payer', 'full', 'currency', 'tag_paths')
+    fields = ('key', 'account', 'payee', 'payer', 'currency', 'tag_paths')
     show_change_link = True
 
 
@@ -46,10 +46,10 @@ class ExpenseMapAdmin(admin.ModelAdmin):
 
 @admin.register(Assets)
 class AssetsMapAdmin(admin.ModelAdmin):
-    list_display = ('key', 'full', 'assets', 'tags_display', 'owner', 'enable')
+    list_display = ('key', 'assets', 'tags_display', 'owner', 'enable')
     list_per_page = 500
     list_filter = ['owner', 'enable', 'tags']
-    search_fields = ['full', 'key']
+    search_fields = ['key']
     filter_horizontal = ('tags',)
     raw_id_fields = ('assets', 'owner')
 
@@ -96,13 +96,13 @@ class TemplateAdmin(admin.ModelAdmin):
 class TemplateItemAdmin(admin.ModelAdmin):
     list_display = (
         'template', 'key', 'account', 'tag_paths_display',
-        'payee', 'payer', 'full', 'currency',
+        'payee', 'payer', 'currency',
     )
     list_per_page = 500
     list_filter = ['template', 'currency']
-    search_fields = ['key', 'account', 'payee', 'payer', 'full']
+    search_fields = ['key', 'account', 'payee', 'payer']
     fields = (
-        'template', 'key', 'account', 'payee', 'payer', 'full', 'currency', 'tag_paths',
+        'template', 'key', 'account', 'payee', 'payer', 'currency', 'tag_paths',
     )
 
     def tag_paths_display(self, obj):

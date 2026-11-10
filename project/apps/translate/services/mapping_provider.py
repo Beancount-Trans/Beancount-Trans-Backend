@@ -50,7 +50,6 @@ class TemplateExpenseMapping:
 class TemplateAssetsMapping:
     """从模板创建的资产映射对象"""
     key: str
-    full: str
     assets: Optional[MockAccountObject]
     enable: bool = True
     tags: EmptyTagsManager = None
@@ -169,7 +168,6 @@ class MappingDataProvider:
             for item in template.items.all():
                 mapping = TemplateAssetsMapping(
                     key=item.key,
-                    full=item.full,
                     assets=MockAccountObject(
                         account=item.account if item.account else 'Assets:Other'
                     ) if item.account else None,

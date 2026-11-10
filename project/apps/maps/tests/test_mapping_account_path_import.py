@@ -52,7 +52,6 @@ class TestMappingAccountPathImport:
             "/api/assets/",
             {
                 "key": "a_key",
-                "full": "现金",
                 "assets_account": "Assets:Cash",
             },
             format="json",
@@ -68,7 +67,7 @@ class TestMappingAccountPathImport:
         client.force_authenticate(user=user)
         r = client.post(
             "/api/assets/",
-            [{"key": "y", "full": "n", "assets_account": "Assets:Nope"}],
+            [{"key": "y", "assets_account": "Assets:Nope"}],
             format="json",
         )
         assert r.status_code == status.HTTP_200_OK

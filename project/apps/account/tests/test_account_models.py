@@ -40,7 +40,6 @@ class AccountEnableSyncTest(TestCase):
 
         self.assets = Assets.objects.create(
             key='test_assets',
-            full='测试资产',
             assets=self.account,
             owner=self.user,
             enable=True
@@ -124,7 +123,6 @@ class AccountDeleteMigrationTest(TestCase):
 
         self.assets = Assets.objects.create(
             key='test_assets',
-            full='测试资产',
             assets=self.source_account,
             owner=self.user,
             enable=True

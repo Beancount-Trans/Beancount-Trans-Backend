@@ -172,22 +172,12 @@ def ccb_debit_get_expense(self, ownerid):
 
 
 def ccb_debit_get_account(self, ownerid):
-    """根据bank_type_init_key得到的key来查找对应的account
-
-    Args:
-        self (string): _description_
-        ownerid (string): _description_
-
-    Returns:
-        account: _description_
-    """
+    """根据账单中的付款方式解析对应的账本账户。"""
+    from project.apps.translate.services.account_resolution import resolve_account_from_text
     from project.apps.translate.utils import ASSETS_OTHER
-    key = self.key
-    if key in self.full_list:
-        account_instance = self.find_asset_by_full(key)
-        if account_instance and account_instance.assets:
-            return extract_account_string(account_instance.assets)
-    return ASSETS_OTHER
+
+    result = resolve_account_from_text(ownerid, self.key, bill=self.bill)
+    return result.account if result.ok else ASSETS_OTHER
 
 
 def ccb_debit_get_balance(data):

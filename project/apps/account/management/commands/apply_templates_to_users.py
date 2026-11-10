@@ -19,6 +19,13 @@ from project.apps.account.models import (
     is_valid_beancount_account_path,
 )
 from project.apps.maps.models import Template, TemplateItem, Expense, Assets, Income
+from project.apps.external_accounts.hints import slot_product
+from project.apps.external_accounts.models import (
+    ExternalAccount,
+    ExternalAccountAlias,
+    ExternalAccountBinding,
+    Institution,
+)
 from project.apps.tags.models import Tag, TagTemplate
 from project.apps.translate.models import FormatConfig
 
@@ -398,13 +405,51 @@ class Command(BaseCommand):
             Assets.objects.create(
                 owner=user,
                 key=item.key,
-                full=item.full,
                 assets=account,
                 enable=True
             )
+            self._ensure_external_account(user, item, account)
             created_count += 1
 
         return created_count
+
+    def _ensure_external_account(self, user, item, account):
+        """按模板项的结构化身份创建外部账户、别名与绑定。"""
+        if not item.institution_code or not item.external_kind:
+            return
+
+        institution = Institution.objects.filter(code=item.institution_code).first()
+        if institution is None:
+            return
+
+        external, _ = ExternalAccount.objects.get_or_create(
+            owner=user,
+            institution=institution,
+            kind=item.external_kind,
+            tail=item.tail,
+            product=slot_product(item.slot),
+            defaults={'display_name': item.display_name, 'slot': item.slot},
+        )
+        ExternalAccountAlias.objects.get_or_create(
+            owner=user,
+            text=item.key,
+            defaults={
+                'external_account': external,
+                'source': ExternalAccountAlias.SOURCE_TEMPLATE,
+            },
+        )
+
+        if account is None:
+            return
+        if ExternalAccountBinding.objects.filter(external_account=external).exists():
+            return
+        if ExternalAccountBinding.objects.filter(account=account).exists():
+            return
+        ExternalAccountBinding.objects.create(
+            owner=user,
+            external_account=external,
+            account=account,
+        )
 
     def _print_summary(self, stats, dry_run):
         """输出统计摘要"""

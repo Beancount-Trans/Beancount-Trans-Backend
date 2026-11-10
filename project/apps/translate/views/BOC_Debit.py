@@ -156,6 +156,31 @@ class BocIncomePeerResult(NamedTuple):
     mapping_tags: List[Any]
 
 
+def _is_bill_own_card(mapping, payment_method: str) -> bool:
+    """判断映射是否就是这笔账单所属的卡。"""
+    from project.apps.external_accounts.hints import (
+        infer_external_account_hint,
+        infer_hint_from_account_path,
+    )
+    from project.apps.translate.services.mapping_provider import extract_account_string
+
+    if not mapping.assets:
+        return False
+    own = infer_external_account_hint(payment_method, bill='BOC_Debit')
+    mapping_hint = infer_hint_from_account_path(extract_account_string(mapping.assets))
+    if not own.institution_code or not mapping_hint.institution_code:
+        return False
+    return (
+        own.institution_code,
+        own.kind,
+        own.tail,
+    ) == (
+        mapping_hint.institution_code,
+        mapping_hint.kind,
+        mapping_hint.tail,
+    )
+
+
 def boc_debit_try_income_peer_asset(
     data: dict,
     asset_mappings: List,
@@ -169,7 +194,7 @@ def boc_debit_try_income_peer_asset(
     for m in asset_mappings or []:
         if not m.key or m.key not in blob:
             continue
-        if m.full == pm:
+        if _is_bill_own_card(m, pm):
             continue
         if not m.assets:
             continue
@@ -217,12 +242,10 @@ def boc_debit_init_key(data):
 
 
 def boc_debit_get_account(self, ownerid):
-    key = self.key
-    if key in self.full_list:
-        account_instance = self.find_asset_by_full(key)
-        if account_instance and account_instance.assets:
-            return extract_account_string(account_instance.assets)
-    return ASSETS_OTHER
+    from project.apps.translate.services.account_resolution import resolve_account_from_text
+
+    result = resolve_account_from_text(ownerid, self.key, bill=self.bill)
+    return result.account if result.ok else ASSETS_OTHER
 
 
 def boc_debit_get_balance(data):

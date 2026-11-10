@@ -147,8 +147,8 @@ class AssetsViewSet(BaseMappingViewSet):
     """资产映射管理视图集"""
     queryset = Assets.objects.all()
     serializer_class = AssetsSerializer
-    search_fields = ['full']
-    ordering_fields = ['id', 'full']
+    search_fields = ['key']
+    ordering_fields = ['id', 'key']
 
     def get_queryset(self):
         """优化查询，预加载标签"""
@@ -643,7 +643,6 @@ class TemplateViewSet(ModelViewSet):
                 Assets.objects.create(
                     owner=self.request.user,
                     key=item.key,
-                    full=item.full,
                     assets=target_account
                 )
                 result['created'] += 1
@@ -677,7 +676,6 @@ class TemplateViewSet(ModelViewSet):
                 Assets.objects.create(
                     owner=self.request.user,
                     key=item.key,
-                    full=item.full,
                     assets=target_account
                 )
                 result['created'] += 1

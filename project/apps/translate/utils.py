@@ -47,35 +47,33 @@ transaction_status = {
 }
 
 
+DEFAULT_SLOT_ASSETS = {
+    "WECHATPAY": "wechat_pay",
+    "WECHATFUND": "wechat_fund",
+    "ALIPAY": "alipay_balance",
+    "ALIFUND": "alipay_fund",
+    "HUABEI": "alipay_huabei",
+    "JIEBEI": "alipay_jiebei",
+    "BEIYONGJIN": "alipay_beiyongjin",
+}
+
+
 def get_default_assets(ownerid):
     """
     获取登录账号的资产账户的默认值
     :param ownerid: 用户id
     :return: None
     """
-    from project.apps.translate.services.mapping_provider import get_mapping_provider, extract_account_string
+    from project.apps.external_accounts.resolver import resolve_slot
+    from project.apps.translate.services.account_resolution import resolve_template_slot
 
-    default_assets = {
-        "微信零钱": "WECHATPAY",
-        "微信零钱通": "WECHATFUND",
-        "支付宝余额": "ALIPAY",
-        "支付宝余额宝": "ALIFUND",
-        "支付宝花呗": "HUABEI",
-        "支付宝借呗": "JIEBEI",
-        "支付宝备用金": "BEIYONGJIN"
-    }
     actual_assets = {}
-
-    # 使用映射数据提供者获取资产映射
-    provider = get_mapping_provider(ownerid)
-    asset_mappings = provider.get_asset_mappings(enable_only=True)
-
-    for asset_name, var_name in default_assets.items():
-        # 从映射列表中查找
-        asset = next((m for m in asset_mappings if m.full == asset_name), None)
-        account_str = extract_account_string(asset.assets) if (asset and asset.assets) else ASSETS_OTHER
-        globals()[var_name] = account_str
-        actual_assets[var_name] = account_str
+    for var_name, slot in DEFAULT_SLOT_ASSETS.items():
+        resolution = resolve_slot(ownerid, slot)
+        if resolution.ok:
+            actual_assets[var_name] = resolution.account
+            continue
+        actual_assets[var_name] = resolve_template_slot(slot, ownerid) or ASSETS_OTHER
     return actual_assets
 
 

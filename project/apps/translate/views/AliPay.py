@@ -2,11 +2,9 @@
 import re
 # import logging
 
-from project.apps.maps.models import Assets
 from typing import Dict, Optional
 
 from project.apps.translate.utils import ASSETS_OTHER, BILL_ALI, EXPENSES_OTHER, pattern
-from project.apps.translate.services.mapping_provider import extract_account_string
 
 ALIPAY_FALLBACK_PAYMENT_MARKERS = (
     "亲情卡",
@@ -105,48 +103,32 @@ def alipay_parent_uuid(row: Dict) -> Optional[str]:
 
 
 def alipay_get_expense_account(self, assets, ownerid):
-    key = self.key
-    if key in self.key_list:
-        account_instance = self.find_asset_by_key(key)
-        if account_instance and account_instance.assets:
-            return extract_account_string(account_instance.assets)
-        return ASSETS_OTHER
-    elif key == "":
-        return assets["ALIPAY"]
-    elif '(' in key and ')' in key:
-        digits = key.split('(')[1].split(')')[0]  # 提取 account 中的数字部分，例如中信银行信用卡(6428) -> 6428
-        if digits in self.key_list:  # 判断提取到的数字是否在列表中
-            account_instance = self.find_asset_by_key(digits)
-            if account_instance and account_instance.assets:
-                return extract_account_string(account_instance.assets)
-            return ASSETS_OTHER
-        else:
-            return ASSETS_OTHER  # 提取到的数字不在列表中，说明该账户不在数据库中，需要手动对账
-    else:
-        return ASSETS_OTHER
+    from project.apps.translate.services.account_resolution import resolve_payment_account
+
+    return resolve_payment_account(
+        ownerid,
+        self.key,
+        bill=self.bill,
+        fallback=assets["ALIPAY"],
+        mappings=self._asset_mappings,
+    )
 
 
 def alipay_get_income_account(self, assets, ownerid):
-    key = self.key
-    if key in self.key_list:
-        account_instance = self.find_asset_by_key(key)
-        if account_instance and account_instance.assets:
-            return extract_account_string(account_instance.assets)
-        return ASSETS_OTHER
-    elif key == "":
-        return assets["ALIPAY"]
-    elif '(' in key and ')' in key:
-        digits = key.split('(')[1].split(')')[0]  # 提取 account 中的数字部分，例如中信银行信用卡(6428) -> 6428
-        if digits in self.key_list:  # 判断提取到的数字是否在列表中
-            account_instance = self.find_asset_by_key(digits)
-            if account_instance and account_instance.assets:
-                return extract_account_string(account_instance.assets)
-            return ASSETS_OTHER
-        else:
-            return ASSETS_OTHER  # 提取到的数字不在列表中，说明该账户不在数据库中，需要手动对账
+    from project.apps.translate.services.account_resolution import resolve_payment_account
+
+    return resolve_payment_account(
+        ownerid,
+        self.key,
+        bill=self.bill,
+        fallback=assets["ALIPAY"],
+        mappings=self._asset_mappings,
+    )
 
 
 def alipay_get_balance_account(self, data, assets, ownerid, fallback_account='Equity:Adjustments'):
+    from project.apps.translate.services.account_resolution import resolve_payment_account
+
     # account = "Unknown-Account"  # 方便排查问题
     account = self.account
     if self.type == "转账收款到余额宝":
@@ -156,34 +138,30 @@ def alipay_get_balance_account(self, data, assets, ownerid, fallback_account='Eq
     elif self.type == "余额宝-转出到余额":
         account = assets["ALIFUND"]
     elif self.type == "余额宝-单次转入":
-        result = data['payment_method']
-        for key in self.key_list:
-            if key in result:
-                expend_instance = self.find_asset_by_key(key)
-                if expend_instance and expend_instance.assets:
-                    return extract_account_string(expend_instance.assets)
-                return ASSETS_OTHER
-            else:
-                account = ASSETS_OTHER
+        account = resolve_payment_account(
+            ownerid,
+            data['payment_method'],
+            bill=self.bill,
+            fallback=ASSETS_OTHER,
+            mappings=self._asset_mappings,
+        )
     elif self.type == "余额宝-转出到银行卡":
         account = assets["ALIFUND"]
     elif self.type == "充值-普通充值":
         account = ASSETS_OTHER  # 支付宝账单中银行卡充值到余额时没有任何银行的信息，需要手动对账
-    elif self.type == "提现-实时提现" or self.type == "提现-快速提现":  # 利用账单中的"交易对方"与数据库中的"full"进行对比，若被包含可直接匹配assets
+    elif self.type == "提现-实时提现" or self.type == "提现-快速提现":  # 提现到支付宝余额（交易对方信息由对端分支解析）
         account = assets["ALIPAY"]
     elif alipay_uses_fallback_payment_method(data['payment_method']):
         account = fallback_account
     else:
-        result = data['payment_method']
-        for key in self.key_list:
-            if key in result:
-                account_instance = self.find_asset_by_key(key)
-                if account_instance and account_instance.assets:
-                    return extract_account_string(account_instance.assets)
-                return ASSETS_OTHER
-            else:
-                account = ASSETS_OTHER
-        # account = ASSETS_OTHER  # 支付宝账单中提现最大颗粒度只到具体银行，若该银行有两张银行卡便有问题，需要手动对账
+        # 提现最大颗粒度只到具体银行，同银行多张卡时退回 Assets:Other 人工对账
+        account = resolve_payment_account(
+            ownerid,
+            data['payment_method'],
+            bill=self.bill,
+            fallback=ASSETS_OTHER,
+            mappings=self._asset_mappings,
+        )
     return account
 
 
@@ -203,24 +181,22 @@ def alipay_get_balance_expense(self, data, assets, ownerid):
     elif self.type == "余额宝-单次转入":
         expend = assets["ALIFUND"]
     elif self.type == "余额宝-转出到银行卡":
-        result = data['payment_method']
-        for key in self.key_list:
-            if key in result:
-                expend_instance = self.find_asset_by_key(key)
-                if expend_instance and expend_instance.assets:
-                    return extract_account_string(expend_instance.assets)
-                return ASSETS_OTHER
-        expend = ASSETS_OTHER
+        from project.apps.translate.services.account_resolution import resolve_payment_account
+
+        expend = resolve_payment_account(
+            ownerid,
+            data['payment_method'],
+            bill=self.bill,
+            fallback=ASSETS_OTHER,
+            mappings=self._asset_mappings,
+        )
     elif self.type == "充值-普通充值":
         expend = assets["ALIPAY"]  # 支付宝账单中银行卡充值到余额时没有任何银行的信息，需要手动对账
     elif self.type == "提现-实时提现" or self.type == "提现-快速提现":
-        result = data['counterparty'] + "储蓄卡"  # 例如"宁波银行储蓄卡"
-        for full in self.full_list:
-            if result in full:
-                expend_instance = self.find_asset_by_full(full)
-                if expend_instance and expend_instance.assets:
-                    return extract_account_string(expend_instance.assets)
-                return ASSETS_OTHER
+        from project.apps.translate.services.account_resolution import resolve_account_from_text
+
+        result = resolve_account_from_text(ownerid, data['counterparty'] + "储蓄卡", bill=self.bill)
+        expend = result.account if result.ok else ASSETS_OTHER
     elif re.match(pattern["花呗主动还款"], self.type) or re.match(pattern["花呗自动还款"], self.type):  # 账单类型匹配"花呗主动还款-2022年09月账单"
         expend = assets["HUABEI"]
     elif ("蚂蚁借呗放款至银行卡" in self.type) or ("蚂蚁借呗还款" in self.type):
@@ -228,22 +204,21 @@ def alipay_get_balance_expense(self, data, assets, ownerid):
     elif ("备用金取出至余额" in self.type) or ("备用金归还" in self.type):
         expend = assets["BEIYONGJIN"]
     elif self.type == "信用卡还款":
-        result = data['counterparty'] + "信用卡"  # 例如"招商银行信用卡"
-        for full in self.full_list:
-            if result in full:
-                expend_instance = self.find_asset_by_full(full)
-                if expend_instance and expend_instance.assets:
-                    return extract_account_string(expend_instance.assets)
-                return ASSETS_OTHER
+        from project.apps.translate.services.account_resolution import resolve_account_from_text
+
+        result = resolve_account_from_text(ownerid, data['counterparty'] + "信用卡", bill=self.bill)
+        expend = result.account if result.ok else ASSETS_OTHER
     elif re.match(pattern["基金"], self.type):
+        from project.apps.translate.services.account_resolution import resolve_payment_account
+
         result = data['commodity'][data['commodity'].index("卖出至") + len("卖出至"):]
-        for key in self.key_list:
-            if result in key:
-                expend_instance = self.find_asset_by_key(key)
-                if expend_instance and expend_instance.assets:
-                    return extract_account_string(expend_instance.assets)
-                return ASSETS_OTHER
-        expend = ASSETS_OTHER
+        expend = resolve_payment_account(
+            ownerid,
+            result,
+            bill=self.bill,
+            fallback=ASSETS_OTHER,
+            mappings=self._asset_mappings,
+        )
     else:
         expend = ASSETS_OTHER
     return expend

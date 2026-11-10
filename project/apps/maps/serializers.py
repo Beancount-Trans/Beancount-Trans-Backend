@@ -140,7 +140,7 @@ class AssetsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assets
         fields = [
-            'id', 'owner', 'key', 'full', 'assets', 'assets_id', 'assets_account',
+            'id', 'owner', 'key', 'assets', 'assets_id', 'assets_account',
             'enable', 'tags', 'tag_ids',
         ]
 

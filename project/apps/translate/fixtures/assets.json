@@ -6,7 +6,6 @@
     "created": "2024-10-18T16:58:16.416+08:00",
     "modified": "2024-10-18T16:58:16.416+08:00",
     "key": "5522",
-    "full": "中国建设银行储蓄卡(5522)",
     "assets": "Assets:Savings:Bank:CCB:C5522",
     "owner": 1
   }
@@ -18,7 +17,6 @@
     "created": "2024-10-18T16:58:16.424+08:00",
     "modified": "2024-10-18T16:58:16.424+08:00",
     "key": "6428",
-    "full": "中信银行信用卡(6428)",
     "assets": "Liabilities:CreditCard:Bank:CITIC:C6428",
     "owner": 1
   }
@@ -30,7 +28,6 @@
     "created": "2024-10-18T16:58:16.430+08:00",
     "modified": "2024-10-18T16:58:16.430+08:00",
     "key": "零钱通",
-    "full": "微信零钱通",
     "assets": "Assets:Savings:Web:WechatFund",
     "owner": 1
   }
@@ -42,7 +39,6 @@
     "created": "2024-10-18T16:58:16.438+08:00",
     "modified": "2024-10-18T16:58:16.438+08:00",
     "key": "零钱",
-    "full": "微信零钱",
     "assets": "Assets:Savings:Web:WechatPay",
     "owner": 1
   }
@@ -54,7 +50,6 @@
     "created": "2024-10-18T16:58:16.447+08:00",
     "modified": "2024-10-18T16:58:16.447+08:00",
     "key": "/",
-    "full": "微信零钱",
     "assets": "Assets:Savings:Web:WechatPay",
     "owner": 1
   }
@@ -66,7 +61,6 @@
     "created": "2024-10-18T16:58:16.454+08:00",
     "modified": "2024-10-18T16:58:16.454+08:00",
     "key": "8837",
-    "full": "中国招商银行储蓄卡(8837)",
     "assets": "Assets:Savings:Bank:CMB:C8837",
     "owner": 1
   }
@@ -78,7 +72,6 @@
     "created": "2024-10-18T16:58:16.463+08:00",
     "modified": "2024-10-18T16:58:16.463+08:00",
     "key": "1746",
-    "full": "宁波银行储蓄卡(1746)",
     "assets": "Assets:Savings:Bank:NBCB:C1746",
     "owner": 1
   }
@@ -90,7 +83,6 @@
     "created": "2024-10-18T16:58:16.470+08:00",
     "modified": "2024-10-18T16:58:16.471+08:00",
     "key": "8273",
-    "full": "中国农业银行储蓄卡(8273)",
     "assets": "Assets:Savings:Bank:ABC:C8273",
     "owner": 1
   }
@@ -102,7 +94,6 @@
     "created": "2024-10-18T16:58:16.479+08:00",
     "modified": "2024-10-18T16:58:16.479+08:00",
     "key": "7651",
-    "full": "中国工商银行储蓄卡(7651)",
     "assets": "Assets:Savings:Bank:ICBC:C7651",
     "owner": 1
   }
@@ -114,7 +105,6 @@
     "created": "2024-10-18T16:58:16.486+08:00",
     "modified": "2024-10-18T16:58:16.486+08:00",
     "key": "5244",
-    "full": "中国工商银行储蓄卡(5244)",
     "assets": "Assets:Savings:Bank:ICBC:C5244",
     "owner": 1
   }
@@ -126,7 +116,6 @@
     "created": "2024-10-18T16:58:16.493+08:00",
     "modified": "2024-10-18T16:58:16.493+08:00",
     "key": "5636",
-    "full": "华夏银行储蓄卡(5636)",
     "assets": "Assets:Savings:Bank:HXB:C5636",
     "owner": 1
   }
@@ -138,7 +127,6 @@
     "created": "2024-10-18T16:58:16.500+08:00",
     "modified": "2024-10-18T16:58:16.501+08:00",
     "key": "余额宝",
-    "full": "支付宝余额宝",
     "assets": "Assets:Savings:Web:AliFund",
     "owner": 1
   }
@@ -150,7 +138,6 @@
     "created": "2024-10-18T16:58:16.509+08:00",
     "modified": "2024-10-18T16:58:16.509+08:00",
     "key": "余额",
-    "full": "支付宝余额",
     "assets": "Assets:Savings:Web:AliPay",
     "owner": 1
   }
@@ -162,7 +149,6 @@
     "created": "2024-10-18T16:58:16.519+08:00",
     "modified": "2024-10-18T16:58:16.519+08:00",
     "key": "戴某轩",
-    "full": "小荷包(戴某轩)",
     "assets": "Assets:Savings:Web:XiaoHeBao:DaiMouXuan",
     "owner": 1
   }
@@ -174,7 +160,6 @@
     "created": "2024-10-18T16:58:16.526+08:00",
     "modified": "2024-10-18T16:58:16.526+08:00",
     "key": "账户余额",
-    "full": "支付宝余额",
     "assets": "Assets:Savings:Web:AliPay",
     "owner": 1
   }
@@ -186,7 +171,6 @@
     "created": "2024-10-18T16:58:16.533+08:00",
     "modified": "2024-10-18T16:58:16.533+08:00",
     "key": "花呗",
-    "full": "支付宝花呗",
     "assets": "Liabilities:CreditCard:Web:HuaBei",
     "owner": 1
   }
@@ -198,7 +182,6 @@
     "created": "2024-10-18T16:58:16.542+08:00",
     "modified": "2024-10-18T16:58:16.542+08:00",
     "key": "4523",
-    "full": "中国招商银行信用卡(4523)",
     "assets": "Liabilities:CreditCard:Bank:CMB:C4523",
     "owner": 1
   }
@@ -210,7 +193,6 @@
     "created": "2024-10-18T16:58:16.552+08:00",
     "modified": "2024-10-18T16:58:16.552+08:00",
     "key": "8313",
-    "full": "中国招商银行信用卡(8313)",
     "assets": "Liabilities:CreditCard:Bank:CMB:C8313",
     "owner": 1
   }
@@ -222,7 +204,6 @@
     "created": "2024-10-18T16:58:16.561+08:00",
     "modified": "2024-10-18T16:58:16.561+08:00",
     "key": "9813",
-    "full": "中国招商银行信用卡(9813)",
     "assets": "Liabilities:CreditCard:Bank:CMB:C9813",
     "owner": 1
   }
@@ -234,7 +215,6 @@
     "created": "2024-10-18T16:58:16.569+08:00",
     "modified": "2024-10-18T16:58:16.569+08:00",
     "key": "0005",
-    "full": "浙江农商银行储蓄卡(0005)",
     "assets": "Assets:Savings:Bank:ZJRCUB:C0005",
     "owner": 1
   }
@@ -246,7 +226,6 @@
     "created": "2024-10-18T16:58:16.577+08:00",
     "modified": "2024-10-18T16:58:16.577+08:00",
     "key": "0814",
-    "full": "中国银行储蓄卡(0814)",
     "assets": "Assets:Savings:Bank:BOC:C0814",
     "owner": 1
   }
@@ -258,7 +237,6 @@
     "created": "2024-10-18T16:58:16.585+08:00",
     "modified": "2024-10-18T16:58:16.585+08:00",
     "key": "4144",
-    "full": "中国光大银行储蓄卡(4144)",
     "assets": "Assets:Savings:Bank:CEB:C4144",
     "owner": 1
   }

@@ -25,7 +25,6 @@ class Expense(BaseModel):
 
 class Assets(BaseModel):
     key = models.CharField(max_length=16, null=False, help_text="关键字")
-    full = models.CharField(max_length=16, null=False, help_text="账户名称")
     assets = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, help_text="资产账户")
     owner = models.ForeignKey(User, related_name='assets', on_delete=models.CASCADE)
     enable = models.BooleanField(default=True, verbose_name="是否启用", help_text="启用状态")
@@ -37,7 +36,7 @@ class Assets(BaseModel):
         verbose_name_plural = verbose_name
 
     def __str__(self):
-        return self.full
+        return self.key
 
 
 class Income(BaseModel):
@@ -87,9 +86,15 @@ class TemplateItem(BaseModel):
     account = models.CharField(max_length=128, null=True, blank=True, help_text="映射账户路径")
     payee = models.CharField(max_length=32, null=True, blank=True, help_text="收款方")
     payer = models.CharField(max_length=32, null=True, blank=True, help_text="付款方")
-    full = models.CharField(max_length=32, null=True, blank=True, help_text="账户全称")
     currency = models.CharField(max_length=24, null=True, blank=True, help_text="货币代码")
     tag_paths = models.JSONField(default=list, blank=True, help_text="关联标签路径列表")
+
+    # 资产模板项的结构化外部身份，用于创建用户外部账户
+    institution_code = models.CharField(max_length=32, blank=True, default='', help_text="机构编码")
+    external_kind = models.CharField(max_length=16, blank=True, default='', help_text="资金性质")
+    tail = models.CharField(max_length=4, blank=True, default='', help_text="卡号后四位")
+    slot = models.CharField(max_length=32, blank=True, default='', help_text="平台固定槽位")
+    display_name = models.CharField(max_length=64, blank=True, default='', help_text="外部账户展示名")
 
     class Meta:
         db_table = 'maps_template_item'

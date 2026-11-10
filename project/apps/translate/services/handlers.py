@@ -21,7 +21,6 @@ class AccountHandler:
     def __init__(self, data):
         self.key = None
         self.key_list = None
-        self.full_list = None
         self.type = None
         self.account = ASSETS_OTHER
         self.bill = data['bill_identifier']
@@ -35,10 +34,6 @@ class AccountHandler:
         """根据 key 查找资产映射"""
         return next((m for m in self._asset_mappings if m.key == key), None)
 
-    def find_asset_by_full(self, full: str):
-        """根据 full 查找资产映射"""
-        return next((m for m in self._asset_mappings if m.full == full), None)
-
     def initialize_type(self, data):
         if self.bill == BILL_ALI:
             self.type = alipay_get_type(data)
@@ -50,7 +45,6 @@ class AccountHandler:
         provider = get_mapping_provider(ownerid)
         asset_mappings = provider.get_asset_mappings(enable_only=True)
         self.key_list = [m.key for m in asset_mappings]
-        self.full_list = [m.full for m in asset_mappings]
         self._asset_mappings = asset_mappings  # 缓存以供后续使用
 
     def initialize_key(self, data):
@@ -159,7 +153,6 @@ class ExpenseHandler:
         self.selected_income_instance = None
         self.selected_key = selected_key
         self.key_list = None
-        self.full_list = None
         self.type = None
         self.expend = EXPENSES_OTHER
         self.income = INCOME_OTHER
@@ -183,10 +176,6 @@ class ExpenseHandler:
     def find_asset_by_key(self, key: str):
         """根据 key 查找资产映射"""
         return next((m for m in self._asset_mappings if m.key == key), None)
-
-    def find_asset_by_full(self, full: str):
-        """根据 full 查找资产映射"""
-        return next((m for m in self._asset_mappings if m.full == full), None)
 
     def initialize_type(self, data: Dict) -> None:
         """初始化交易类型"""
@@ -212,10 +201,9 @@ class ExpenseHandler:
             self.key_list = [m.key for m in asset_mappings]
             self._asset_mappings = asset_mappings  # 缓存
 
-        # full_list 用于资产查询，如果还没缓存资产映射，则获取并缓存
+        # 资产映射缓存用于资产标签与对端账户查询
         if not self._asset_mappings:
             self._asset_mappings = provider.get_asset_mappings(enable_only=True)
-        self.full_list = [m.full for m in self._asset_mappings]
 
     def _mapping_has_account(self, instance, account_attr: str = "expend") -> bool:
         """映射是否配置了账户（expend / income）。"""

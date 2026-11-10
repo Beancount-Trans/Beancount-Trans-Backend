@@ -101,19 +101,16 @@ class AssetsModelTest(BaseModelTestMixin, TestCase):
         """测试资产映射模型"""
         asset = Assets.objects.create(
             key="alipay",
-            full="支付宝",
             assets=self.asset_account,
             owner=self.user
         )
 
         self.assertEqual(asset.key, "alipay")
-        self.assertEqual(asset.full, "支付宝")
         self.assertEqual(asset.assets.account, "Assets:Digital:Alipay")
 
         # 测试默认值
         asset_default = Assets.objects.create(
             key="default_asset",
-            full="默认资产",
             assets=self.other_asset_account,
             owner=self.user
         )
@@ -124,7 +121,6 @@ class AssetsModelTest(BaseModelTestMixin, TestCase):
         with self.assertRaises(ValidationError):
             obj = Assets(
                 key="a"*17,  # 超过 max_length=16
-                full="test",
                 assets=self.asset_account,
                 owner=self.user
             )

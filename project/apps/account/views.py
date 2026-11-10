@@ -235,7 +235,7 @@ class AccountViewSet(ModelViewSet):
                     {
                         'id': m.id, 
                         'key': m.key, 
-                        'full': m.full,
+                        'account': m.assets.account if m.assets else None,
                         'enable': m.enable
                     }
                     for m in assets_mappings

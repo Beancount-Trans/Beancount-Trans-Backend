@@ -321,8 +321,12 @@ class Command(BaseCommand):
                 TemplateItem.objects.create(
                     template=assets_template,
                     key=item["key"],
-                    full=(item.get("full") or "").strip() or None,
                     account=(item.get("account") or "").strip() or None,
+                    institution_code=(item.get("institution_code") or "").strip(),
+                    external_kind=(item.get("external_kind") or "").strip(),
+                    tail=(item.get("tail") or "").strip(),
+                    slot=(item.get("slot") or "").strip(),
+                    display_name=(item.get("display_name") or "").strip(),
                 )
             self.stdout.write(self.style.SUCCESS(
                 f'✓ 创建官方资产映射模板 ({len(assets_data["items"])} 项)'

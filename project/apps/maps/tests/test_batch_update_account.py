@@ -155,8 +155,8 @@ class TestIncomeBatchUpdateAccount:
 @pytest.mark.django_db
 class TestAssetsBatchUpdateAccount:
     def test_success(self, api_client, user, assets_account, target_assets_account):
-        a1 = Assets.objects.create(owner=user, key='6222', full='招商银行', assets=assets_account)
-        a2 = Assets.objects.create(owner=user, key='6223', full='工商银行', assets=assets_account)
+        a1 = Assets.objects.create(owner=user, key='6222', assets=assets_account)
+        a2 = Assets.objects.create(owner=user, key='6223', assets=assets_account)
 
         url = reverse('assets-batch-update-account')
         response = api_client.post(url, {
@@ -168,10 +168,9 @@ class TestAssetsBatchUpdateAccount:
         assert response.data['updated_count'] == 2
         a1.refresh_from_db()
         assert a1.assets_id == target_assets_account.id
-        assert a1.full == '招商银行'
 
     def test_missing_assets_id(self, api_client, user, assets_account):
-        asset = Assets.objects.create(owner=user, key='6222', full='测试卡', assets=assets_account)
+        asset = Assets.objects.create(owner=user, key='6222', assets=assets_account)
         url = reverse('assets-batch-update-account')
         response = api_client.post(url, {'assets_ids': [asset.id]}, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST

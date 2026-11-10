@@ -116,14 +116,41 @@ def _validate_mapping_income_item(item: dict) -> bool:
 
 
 def _validate_mapping_assets_item(item: dict) -> bool:
-    return (
+    if not (
         isinstance(item, dict)
         and isinstance(item.get("key"), str)
         and len(item["key"].strip()) > 0
-        and isinstance(item.get("full"), str)
         and isinstance(item.get("account"), str)
         and len(item["account"].strip()) > 0
+    ):
+        return False
+
+    # 结构化身份是可选的；一旦写了就必须自洽，否则外部账户会被静默跳过
+    institution_code = (item.get("institution_code") or "").strip()
+    if not institution_code:
+        return True
+
+    from project.apps.external_accounts.models import (
+        CARD_KINDS,
+        InstrumentKind,
+        PlatformSlot,
     )
+
+    external_kind = (item.get("external_kind") or "").strip()
+    slot = (item.get("slot") or "").strip()
+    tail = str(item.get("tail") or "").strip()
+
+    if external_kind not in InstrumentKind.values:
+        return False
+    if slot and slot not in PlatformSlot.values:
+        return False
+    if tail and not (len(tail) == 4 and tail.isdigit()):
+        return False
+    if external_kind in CARD_KINDS and not tail:
+        return False
+    if external_kind not in CARD_KINDS and tail:
+        return False
+    return True
 
 
 def load_official_mapping_data(template_type: str) -> Optional[dict]:

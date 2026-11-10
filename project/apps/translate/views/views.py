@@ -176,6 +176,13 @@ class SingleBillAnalyzeView(APIView):
             if context.get('status') == 'error':
                 code = context.get('error_code') or 'PARSE_FAILED'
                 raw_error = (context.get('errors') or ['解析失败'])[-1]
+                logger.warning(
+                    '账单解析失败 user=%s file=%s code=%s error=%s',
+                    user.id,
+                    getattr(uploaded_file, 'name', ''),
+                    code,
+                    raw_error,
+                )
                 http_status = (
                     status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
                     if code == 'UNSUPPORTED_BILL'

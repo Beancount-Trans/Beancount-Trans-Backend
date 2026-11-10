@@ -1,68 +1,98 @@
 {
   "name": "官方资产映射",
   "description": "中国用户常用资产映射",
-  "version": "1.0.0",
-  "update_notes": null,
+  "version": "1.1.0",
+  "update_notes": "移除账户描述，改为结构化外部身份",
   "items": [
     {
       "key": "0814",
-      "full": "中国银行储蓄卡(0814)",
-      "account": "Assets:Savings:Bank:BOC:C0814"
+      "account": "Assets:Savings:Bank:BOC:C0814",
+      "institution_code": "BOC",
+      "external_kind": "debit_card",
+      "tail": "0814"
     },
     {
       "key": "6428",
-      "full": "中信银行信用卡(6428)",
-      "account": "Liabilities:CreditCard:Bank:CITIC:C6428"
+      "account": "Liabilities:CreditCard:Bank:CITIC:C6428",
+      "institution_code": "CITIC",
+      "external_kind": "credit_card",
+      "tail": "6428"
     },
     {
       "key": "零钱通",
-      "full": "微信零钱通",
-      "account": "Assets:Savings:Web:WechatFund"
+      "account": "Assets:Savings:Web:WechatFund",
+      "institution_code": "WECHAT",
+      "external_kind": "fund",
+      "slot": "wechat_fund",
+      "display_name": "微信零钱通"
     },
     {
       "key": "零钱",
-      "full": "微信零钱",
-      "account": "Assets:Savings:Web:WechatPay"
+      "account": "Assets:Savings:Web:WechatPay",
+      "institution_code": "WECHAT",
+      "external_kind": "wallet",
+      "slot": "wechat_pay",
+      "display_name": "微信零钱"
     },
     {
       "key": "/",
-      "full": "微信零钱",
-      "account": "Assets:Savings:Web:WechatPay"
+      "account": "Assets:Savings:Web:WechatPay",
+      "institution_code": "WECHAT",
+      "external_kind": "wallet",
+      "slot": "wechat_pay",
+      "display_name": "微信零钱"
     },
     {
       "key": "余额宝",
-      "full": "支付宝余额宝",
-      "account": "Assets:Savings:Web:AliFund"
+      "account": "Assets:Savings:Web:AliFund",
+      "institution_code": "ALIPAY",
+      "external_kind": "fund",
+      "slot": "alipay_fund",
+      "display_name": "支付宝余额宝"
     },
     {
       "key": "余额",
-      "full": "支付宝余额",
-      "account": "Assets:Savings:Web:AliPay"
+      "account": "Assets:Savings:Web:AliPay",
+      "institution_code": "ALIPAY",
+      "external_kind": "wallet",
+      "slot": "alipay_balance",
+      "display_name": "支付宝余额"
     },
     {
       "key": "账户余额",
-      "full": "支付宝余额",
-      "account": "Assets:Savings:Web:AliPay"
+      "account": "Assets:Savings:Web:AliPay",
+      "institution_code": "ALIPAY",
+      "external_kind": "wallet",
+      "slot": "alipay_balance",
+      "display_name": "支付宝余额"
     },
     {
       "key": "花呗",
-      "full": "支付宝花呗",
-      "account": "Liabilities:CreditCard:Web:AliPay"
+      "account": "Liabilities:CreditCard:Web:AliPay:Huabei",
+      "institution_code": "ALIPAY",
+      "external_kind": "credit_line",
+      "slot": "alipay_huabei",
+      "display_name": "支付宝花呗"
     },
     {
       "key": "单车骑行卡抵扣",
-      "full": "单车骑行卡抵扣",
       "account": "Assets:Savings:Recharge:HaLuo"
     },
     {
       "key": "借呗",
-      "full": "支付宝借呗",
-      "account": "Liabilities:CreditCard:Web:AliPay"
+      "account": "Liabilities:CreditCard:Web:AliPay:Jiebei",
+      "institution_code": "ALIPAY",
+      "external_kind": "loan",
+      "slot": "alipay_jiebei",
+      "display_name": "支付宝借呗"
     },
     {
       "key": "备用金",
-      "full": "支付宝备用金",
-      "account": "Liabilities:CreditCard:Web:AliPay"
+      "account": "Liabilities:CreditCard:Web:AliPay:Beiyongjin",
+      "institution_code": "ALIPAY",
+      "external_kind": "loan",
+      "slot": "alipay_beiyongjin",
+      "display_name": "支付宝备用金"
     }
   ]
 }

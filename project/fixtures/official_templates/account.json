@@ -107,6 +107,12 @@
       "description": ""
     },
     {
+      "account_path": "Assets:Savings:Recharge:HaLuo",
+      "enable": true,
+      "reconciliation_rule": null,
+      "description": "哈啰单车骑行卡"
+    },
+    {
       "account_path": "Assets:Savings:Web",
       "enable": true,
       "reconciliation_rule": null,
@@ -452,7 +458,25 @@
       "account_path": "Liabilities:CreditCard:Web:AliPay",
       "enable": true,
       "reconciliation_rule": null,
+      "description": "支付宝历史聚合账户"
+    },
+    {
+      "account_path": "Liabilities:CreditCard:Web:AliPay:Huabei",
+      "enable": true,
+      "reconciliation_rule": null,
       "description": "支付宝花呗"
+    },
+    {
+      "account_path": "Liabilities:CreditCard:Web:AliPay:Jiebei",
+      "enable": true,
+      "reconciliation_rule": null,
+      "description": "支付宝借呗"
+    },
+    {
+      "account_path": "Liabilities:CreditCard:Web:AliPay:Beiyongjin",
+      "enable": true,
+      "reconciliation_rule": null,
+      "description": "支付宝备用金"
     },
     {
       "account_path": "Liabilities:Payables",

@@ -102,6 +102,7 @@ INSTALLED_APPS = [  # 项目中使用的 Django 应用程序
     'django_otp.plugins.otp_totp',
     'project.apps.authentication',
     'project.apps.account',
+    'project.apps.external_accounts',
     'project.apps.fava_instances',
     'project.apps.file_manager',
     'project.apps.git_repository',

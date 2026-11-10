@@ -202,7 +202,6 @@ class TagViewSet(ModelViewSet):
                     {
                         'id': m.id, 
                         'key': m.key, 
-                        'full': m.full,
                         'account': m.assets.account if m.assets else None,
                         'enable': m.enable
                     }
