@@ -53,6 +53,10 @@ class FormatConfig(models.Model):
         ],
         help_text="解析模式偏好：审核模式需要用户审核后再写入，直接写入模式解析后立即写入"
     )
+    auto_provision_assets = models.BooleanField(
+        default=True,
+        help_text="解析成功后自动补齐资产账户与资产映射（付款方式能识别出机构/卡号/平台账户时）"
+    )
 
     class Meta:
         verbose_name = "格式化输出"
@@ -104,7 +108,8 @@ class FormatConfig(models.Model):
                 'reconciliation_fallback_account': 'Equity:Adjustments',
                 'currency': 'CNY',
                 'ai_model': 'BERT',
-                'parsing_mode_preference': 'review'
+                'parsing_mode_preference': 'review',
+                'auto_provision_assets': True,
             }
         )[0]  # 始终返回配置实例
 

@@ -7,6 +7,7 @@ from project.apps.translate.services.init.bill_init_factory import InitFactory
 from project.apps.translate.services.parse.filters import TransactionFilter
 from project.apps.translate.services.parse.transaction_parser import single_parse_transaction
 from project.apps.translate.services.parse.link_resolver import assign_transaction_links
+from project.apps.translate.services.asset_provisioning import provision_missing_asset_accounts
 from project.apps.translate.services.parse_api_key import resolve_parse_llm
 from project.apps.translate.services.similarity import build_similarity_model
 from project.apps.translate.services.parse.installment_expander import (
@@ -239,6 +240,21 @@ class ParseStep(Step):
             # 二次扫描：为同订单/退款关联条目挂 Beancount ^原单号（需在 CacheStep pop _original_row 之前）
             if context.get('parsed_data'):
                 assign_transaction_links(context['parsed_data'])
+
+            # 解析成功后补齐资产账户与映射；失败不影响本次解析结果
+            auto_provision = bool(
+                getattr(config, 'auto_provision_assets', True)
+                and (context.get('args') or {}).get('auto_provision_assets', True)
+            )
+            try:
+                provision_missing_asset_accounts(
+                    context.get('parsed_data') or [],
+                    context.get('bill_type') or '',
+                    owner_id,
+                    enabled=auto_provision,
+                )
+            except Exception:
+                logger.warning('自动补齐资产账户失败', exc_info=True)
         except Exception as e:
             import traceback
             logger.error(f"解析步骤详细错误: {traceback.format_exc()}")

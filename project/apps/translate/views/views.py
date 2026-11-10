@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.shortcuts import render
 from django.contrib.auth import get_user_model
 from project.utils.exceptions import UnsupportedFileTypeError, DecryptionError
-from project.utils.token import get_token_user_id
+from project.utils.token import get_token_user_id, has_valid_token
 from project.utils.tools import get_user_config
 from project.apps.common.permissions import IsOwnerOrAdminReadWriteOnly, AnonymousReadOnlyPermission
 from rest_framework import status
@@ -172,7 +172,10 @@ class SingleBillAnalyzeView(APIView):
         service = AnalyzeService(user=user, config=config)
         results = []
         try:
-            context = service.analyze_single_file(uploaded_file, serializer.validated_data)
+            # 匿名解析没有自己的账户体系，不写入平台账户/映射
+            args = dict(serializer.validated_data)
+            args['auto_provision_assets'] = has_valid_token(request)
+            context = service.analyze_single_file(uploaded_file, args)
             if context.get('status') == 'error':
                 code = context.get('error_code') or 'PARSE_FAILED'
                 raw_error = (context.get('errors') or ['解析失败'])[-1]
