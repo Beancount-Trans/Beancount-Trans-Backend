@@ -105,11 +105,13 @@ def alipay_parent_uuid(row: Dict) -> Optional[str]:
 def alipay_get_expense_account(self, assets, ownerid):
     from project.apps.translate.services.account_resolution import resolve_payment_account
 
+    # 未匹配的付款方式不能静默记到支付宝余额：既会掩盖问题，也会让资产重复计算。
+    # 落到 Assets:Other 后，审核页可提示，也能触发资产账户自动补齐。
     return resolve_payment_account(
         ownerid,
         self.key,
         bill=self.bill,
-        fallback=assets["ALIPAY"],
+        fallback=ASSETS_OTHER,
         mappings=self._asset_mappings,
     )
 
@@ -121,7 +123,7 @@ def alipay_get_income_account(self, assets, ownerid):
         ownerid,
         self.key,
         bill=self.bill,
-        fallback=assets["ALIPAY"],
+        fallback=ASSETS_OTHER,
         mappings=self._asset_mappings,
     )
 

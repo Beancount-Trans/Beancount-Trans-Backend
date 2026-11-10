@@ -62,15 +62,33 @@ def payment_key(bill: str, row: Dict) -> str:
     return text
 
 
-def _account_path_for_hint(hint) -> str:
+def _account_path_for(kind: str, hint) -> str:
     """把结构化线索映射成账本账户路径；线索不足时返回空串。"""
     if hint.slot:
         return SLOT_ACCOUNT_PATHS.get(hint.slot, '')
-    if not hint.institution_code or not hint.tail or hint.kind not in CARD_KINDS:
+    if not kind or kind not in CARD_KINDS or not hint.institution_code or not hint.tail:
         return ''
-    if hint.kind == InstrumentKind.CREDIT_CARD:
+    if kind == InstrumentKind.CREDIT_CARD:
         return f'Liabilities:CreditCard:Bank:{hint.institution_code}:C{hint.tail}'
     return f'Assets:Savings:Bank:{hint.institution_code}:C{hint.tail}'
+
+
+def _resolve_card_kind(owner_id: int, institution: Institution, tail: str, hinted_kind: str) -> str:
+    """确定卡类型：账单写明就用；没写时复用已有身份，未知则按储蓄卡兜底。"""
+    if hinted_kind:
+        return hinted_kind
+    kinds = set(
+        ExternalAccount.objects.filter(
+            owner_id=owner_id, institution=institution, tail=tail
+        ).values_list('kind', flat=True)
+    )
+    if len(kinds) == 1:
+        return kinds.pop()
+    if kinds:
+        # 同一机构同一尾号同时存在储蓄卡与信用卡，无法判断
+        return ''
+    # 微信/支付宝常省略「储蓄卡」，缺省按借记卡落账，用户可在账户管理里改
+    return InstrumentKind.DEBIT_CARD
 
 
 def _ensure_account(owner_id: int, path: str) -> tuple[Optional[Account], bool]:
@@ -115,7 +133,7 @@ def _ensure_asset_mapping(owner_id: int, key: str, account: Account) -> bool:
     return False
 
 
-def _ensure_external_account(owner_id: int, hint, institution: Institution):
+def _ensure_external_account(owner_id: int, hint, institution: Institution, kind: str):
     if hint.slot:
         existing = ExternalAccount.objects.filter(owner_id=owner_id, slot=hint.slot).first()
         if existing is not None:
@@ -125,7 +143,7 @@ def _ensure_external_account(owner_id: int, hint, institution: Institution):
     return ExternalAccount.objects.get_or_create(
         owner_id=owner_id,
         institution=institution,
-        kind=hint.kind,
+        kind=kind,
         tail=hint.tail,
         product=product,
         defaults={
@@ -155,22 +173,26 @@ def provision_asset_account(owner_id: int, text: str, bill: str = '') -> Optiona
     """按付款方式补齐资产账户、外部账户身份与资产映射。
 
     返回可用的账本账户路径；线索不足或账户已被停用时返回 ``None``。
+    银行卡未写卡类型时，优先复用同机构同尾号的已有身份，否则按储蓄卡兜底。
     """
     text = (text or '').strip()
     if not text:
         return None
 
     hint = infer_external_account_hint(text, bill=bill)
-    path = _account_path_for_hint(hint)
-    if not path:
-        return None
-
     institution = Institution.objects.filter(code=hint.institution_code, enable=True).first()
     if institution is None:
         return None
 
+    kind = hint.kind
+    if not kind and not hint.slot and hint.tail:
+        kind = _resolve_card_kind(owner_id, institution, hint.tail, kind)
+    path = _account_path_for(kind, hint)
+    if not path:
+        return None
+
     try:
-        external = _ensure_external_account(owner_id, hint, institution)
+        external = _ensure_external_account(owner_id, hint, institution, kind)
         external = _ensure_alias(owner_id, hint.raw or text, external)
     except Exception:
         logger.warning('自动创建外部账户失败: owner=%s text=%s', owner_id, text, exc_info=True)

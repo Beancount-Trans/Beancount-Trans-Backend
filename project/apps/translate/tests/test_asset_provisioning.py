@@ -28,6 +28,10 @@ def _seed_institutions():
     InstitutionAlias.objects.create(institution=cmb, text='招商银行')
     psbc = Institution.objects.create(code='PSBC', name='中国邮政储蓄银行')
     InstitutionAlias.objects.create(institution=psbc, text='中国邮政储蓄银行')
+    citic = Institution.objects.create(code='CITIC', name='中信银行')
+    InstitutionAlias.objects.create(institution=citic, text='中信银行')
+    rcb = Institution.objects.create(code='RCB', name='农村商业银行')
+    InstitutionAlias.objects.create(institution=rcb, text='农商银行')
     Institution.objects.create(code='ALIPAY', name='支付宝', is_platform=True)
 
 
@@ -117,6 +121,67 @@ class TestProvisionAssetAccount:
         assert Account.objects.filter(owner=user, account=result.account).exists()
         assert ExternalAccountBinding.objects.filter(owner=user, account__account=result.account).exists()
         assert not Assets.objects.filter(owner=user).exists()
+
+    def test_kindless_card_defaults_to_debit(self, user, institutions, own_mappings):
+        result = provision_asset_account(user.id, '中信银行(6428)', bill='alipay')
+
+        assert result is not None
+        assert result.account == 'Assets:Savings:Bank:CITIC:C6428'
+        external = ExternalAccount.objects.get(owner=user, tail='6428')
+        assert external.kind == InstrumentKind.DEBIT_CARD
+
+    def test_kindless_card_reuses_existing_credit_kind(self, user, institutions, own_mappings):
+        citic = Institution.objects.get(code='CITIC')
+        ExternalAccount.objects.create(
+            owner=user,
+            institution=citic,
+            kind=InstrumentKind.CREDIT_CARD,
+            tail='6428',
+        )
+
+        result = provision_asset_account(user.id, '中信银行(6428)', bill='alipay')
+
+        assert result is not None
+        assert result.account == 'Liabilities:CreditCard:Bank:CITIC:C6428'
+        assert ExternalAccount.objects.get(owner=user, tail='6428').kind == InstrumentKind.CREDIT_CARD
+
+    def test_kindless_card_with_ambiguous_kinds_is_skipped(self, user, institutions, own_mappings):
+        citic = Institution.objects.get(code='CITIC')
+        ExternalAccount.objects.create(
+            owner=user, institution=citic, kind=InstrumentKind.DEBIT_CARD, tail='6428'
+        )
+        ExternalAccount.objects.create(
+            owner=user, institution=citic, kind=InstrumentKind.CREDIT_CARD, tail='6428'
+        )
+
+        result = provision_asset_account(user.id, '中信银行(6428)', bill='alipay')
+
+        assert result is None
+        assert not Assets.objects.filter(owner=user, key='中信银行(6428)').exists()
+
+    def test_alipay_unmatched_card_falls_back_to_assets_other(self, user, institutions):
+        from project.apps.translate.utils import get_default_assets
+        from project.apps.translate.views.AliPay import alipay_get_expense_account
+
+        wallet = Account.objects.create(account='Assets:Savings:Web:AliPay', owner=user)
+        alipay = Institution.objects.get(code='ALIPAY')
+        external = ExternalAccount.objects.create(
+            owner=user,
+            institution=alipay,
+            kind=InstrumentKind.WALLET,
+            slot=PlatformSlot.ALIPAY_BALANCE,
+            display_name='支付宝余额',
+        )
+        ExternalAccountBinding.objects.create(
+            owner=user, external_account=external, account=wallet
+        )
+
+        handler = SimpleNamespace(
+            key='农商银行储蓄卡(4444)', bill='alipay', _asset_mappings=[]
+        )
+        result = alipay_get_expense_account(handler, get_default_assets(user.id), user.id)
+
+        assert result == ASSETS_OTHER
 
 
 def _alipay_row(**overrides):
