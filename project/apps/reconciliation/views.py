@@ -172,6 +172,25 @@ class ScheduledTaskViewSet(ModelViewSet):
         last_reconciliation_date = last_reconciliation.as_of_date if last_reconciliation else None
         last_completed_task_id = last_reconciliation.id if last_reconciliation else None
 
+        # 默认对账时间点：沿用当天首条已完成的对账待办；当天没有时沿用上一条已完成的对账待办
+        # as_of_date 比完成日期早一天，说明当时选的是「第二天第一笔交易前」
+        user_account_ids = Account.objects.filter(owner=request.user).values_list('id', flat=True)
+        completed_tasks = ScheduledTask.objects.filter(
+            task_type='reconciliation',
+            content_type=account_content_type,
+            object_id__in=user_account_ids,
+            status='completed',
+            completed_date__isnull=False,
+            as_of_date__isnull=False,
+        )
+        anchor_task = (
+            completed_tasks.filter(completed_date=date.today()).order_by('id').first()
+            or completed_tasks.order_by('-completed_date', '-id').first()
+        )
+        default_reconciliation_timing = 'end_of_day'
+        if anchor_task and anchor_task.as_of_date < anchor_task.completed_date:
+            default_reconciliation_timing = 'start_of_next_day'
+
         # 若当前任务来自撤销（revoked_task 指向被撤销任务），返回该任务的 transaction_items 用于预填
         last_reconciliation_transaction_items = None
         if getattr(task, 'revoked_task_id', None) and task.revoked_task_id:
@@ -197,6 +216,7 @@ class ScheduledTaskViewSet(ModelViewSet):
             'default_allocation_account': default_allocation_account,
             'last_reconciliation_date': last_reconciliation_date,
             'last_completed_task_id': last_completed_task_id,
+            'default_reconciliation_timing': default_reconciliation_timing,
             'last_reconciliation_transaction_items': last_reconciliation_transaction_items or [],
         }
         

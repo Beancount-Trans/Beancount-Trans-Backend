@@ -47,6 +47,66 @@ class TestReconciliationAPI:
         # 首次对账应该返回 True（该账户还没有完成过对账任务）
         assert response.data['is_first_reconciliation'] is True
         assert response.data['default_allocation_account'] == 'Equity:Opening-Balances'
+        # 没有任何已完成对账时，默认时间点为「当天最后一笔交易后」
+        assert response.data['default_reconciliation_timing'] == 'end_of_day'
+
+    def test_start_reconciliation_default_timing_follows_first_completed_today(
+        self, user, account, scheduled_task_pending, mock_bean_file_path
+    ):
+        """当天首条已完成对账选「第二天第一笔交易前」时，后续待办默认沿用"""
+        from django.contrib.contenttypes.models import ContentType
+
+        content_type = ContentType.objects.get_for_model(Account)
+        other_account = Account.objects.create(
+            account='Assets:Savings:Web:AliPay',
+            owner=user
+        )
+        ScheduledTask.objects.create(
+            task_type='reconciliation',
+            content_type=content_type,
+            object_id=other_account.id,
+            scheduled_date=date.today(),
+            completed_date=date.today(),
+            as_of_date=date.today() - timedelta(days=1),
+            status='completed'
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f'/api/reconciliation/tasks/{scheduled_task_pending.id}/start/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['default_reconciliation_timing'] == 'start_of_next_day'
+
+    def test_start_reconciliation_default_timing_follows_previous_completed_task(
+        self, user, account, scheduled_task_pending, mock_bean_file_path
+    ):
+        """当天没有已完成对账时，默认时间点沿用上一条已完成对账的选择"""
+        from django.contrib.contenttypes.models import ContentType
+
+        content_type = ContentType.objects.get_for_model(Account)
+        other_account = Account.objects.create(
+            account='Assets:Savings:Web:AliPay',
+            owner=user
+        )
+        ScheduledTask.objects.create(
+            task_type='reconciliation',
+            content_type=content_type,
+            object_id=other_account.id,
+            scheduled_date=date.today() - timedelta(days=30),
+            completed_date=date.today() - timedelta(days=3),
+            as_of_date=date.today() - timedelta(days=4),
+            status='completed'
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f'/api/reconciliation/tasks/{scheduled_task_pending.id}/start/')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['default_reconciliation_timing'] == 'start_of_next_day'
     
     def test_start_reconciliation_default_allocation_account_from_config(
         self, user, account, scheduled_task_pending, mock_bean_file_path,

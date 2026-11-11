@@ -302,6 +302,10 @@ class ReconciliationStartSerializer(serializers.Serializer):
         allow_null=True,
         help_text="该账户最近一条已完成对账任务 id，用于撤销入口"
     )
+    default_reconciliation_timing = serializers.ChoiceField(
+        choices=['end_of_day', 'start_of_next_day'],
+        help_text="默认对账时间点：沿用当天首条已完成对账，当天没有时沿上一条已完成对账"
+    )
     last_reconciliation_transaction_items = serializers.ListField(
         child=serializers.DictField(),
         required=False,
