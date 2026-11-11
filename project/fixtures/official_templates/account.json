@@ -1,8 +1,8 @@
 {
   "name": "中国用户标准账户模板",
   "description": "适用于中国用户的标准 Beancount 账户结构",
-  "version": "2.0.0",
-  "update_notes": "移除具体银行卡与运营商卡尾号，补齐购物父账户与小荷包；银行卡账户改由解析自动补齐或用户自建",
+  "version": "3.0.0",
+  "update_notes": "资产/负债收敛为支付宝与微信最小闭环；移除应收应付、支付宝信用三件套、小荷包、哈啰、阿里云与电信/联通手机号；储蓄卡、信用卡与运营商仅保留结构节点",
   "items": [
     {
       "account_path": "Assets",
@@ -11,28 +11,16 @@
       "description": ""
     },
     {
-      "account_path": "Assets:Receivables",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Receivables:Personal",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
       "account_path": "Assets:Savings",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "储蓄资产"
     },
     {
       "account_path": "Assets:Savings:Bank",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "储蓄卡（卡号账户由解析自动补齐）"
     },
     {
       "account_path": "Assets:Savings:Cash",
@@ -44,49 +32,25 @@
       "account_path": "Assets:Savings:Recharge",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "储值/代币"
     },
     {
       "account_path": "Assets:Savings:Recharge:Operator",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "运营商（手机号）"
     },
     {
       "account_path": "Assets:Savings:Recharge:Operator:Mobile",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Savings:Recharge:Operator:Telecom",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Savings:Recharge:Operator:Unicom",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Savings:Recharge:AliCloud",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Assets:Savings:Recharge:HaLuo",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "哈啰单车骑行卡"
+      "description": "中国移动"
     },
     {
       "account_path": "Assets:Savings:Web",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "平台钱包（支付宝/微信）"
     },
     {
       "account_path": "Assets:Savings:Web:AliFund",
@@ -99,12 +63,6 @@
       "enable": true,
       "reconciliation_rule": null,
       "description": "支付宝余额"
-    },
-    {
-      "account_path": "Assets:Savings:Web:XiaoHeBao",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "支付宝小荷包"
     },
     {
       "account_path": "Assets:Savings:Web:WechatFund",
@@ -416,55 +374,7 @@
       "account_path": "Liabilities:CreditCard:Bank",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Web",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Web:AliPay",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "支付宝历史聚合账户"
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Web:AliPay:Huabei",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "支付宝花呗"
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Web:AliPay:Jiebei",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "支付宝借呗"
-    },
-    {
-      "account_path": "Liabilities:CreditCard:Web:AliPay:Beiyongjin",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "支付宝备用金"
-    },
-    {
-      "account_path": "Liabilities:Payables",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": ""
-    },
-    {
-      "account_path": "Liabilities:Payables:Organization",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "对XX的债务(机构)"
-    },
-    {
-      "account_path": "Liabilities:Payables:Personal",
-      "enable": true,
-      "reconciliation_rule": null,
-      "description": "对XX的债务(个人)"
+      "description": "信用卡（卡号账户由解析自动补齐）"
     }
   ]
 }

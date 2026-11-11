@@ -1,14 +1,9 @@
 {
   "name": "官方收入映射",
   "description": "中国用户常用收入映射",
-  "version": "1.0.2",
-  "update_notes": "账户模板补齐支付宝小荷包账户，关闭缺失引用",
+  "version": "1.0.3",
+  "update_notes": "移除小荷包映射，与账户模板 3.0.0 对齐",
   "items": [
-    {
-      "key": "小荷包",
-      "payer": null,
-      "account": "Assets:Savings:Web:XiaoHeBao"
-    },
     {
       "key": "红包",
       "payer": null,

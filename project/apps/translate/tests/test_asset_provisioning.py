@@ -195,7 +195,10 @@ def test_slot_paths_match_official_asset_template():
         if item.get('slot')
     }
 
-    assert template_slots == SLOT_ACCOUNT_PATHS
+    # 官方模板只预置最小闭环槽位；代码保留全部槽位以支持按需自动补齐
+    assert template_slots
+    for slot, account in template_slots.items():
+        assert SLOT_ACCOUNT_PATHS[slot] == account
 
 
 def _alipay_row(**overrides):

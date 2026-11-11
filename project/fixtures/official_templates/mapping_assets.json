@@ -1,8 +1,8 @@
 {
   "name": "官方资产映射",
   "description": "中国用户常用资产映射",
-  "version": "2.0.0",
-  "update_notes": "移除具体银行卡与歧义别名 /；银行卡账户改由解析自动补齐或用户自建",
+  "version": "3.0.0",
+  "update_notes": "移除支付宝信用三件套与哈啰骑行卡映射，仅保留最小闭环平台钱包槽位",
   "items": [
     {
       "key": "零钱通",
@@ -43,34 +43,6 @@
       "external_kind": "wallet",
       "slot": "alipay_balance",
       "display_name": "支付宝余额"
-    },
-    {
-      "key": "花呗",
-      "account": "Liabilities:CreditCard:Web:AliPay:Huabei",
-      "institution_code": "ALIPAY",
-      "external_kind": "credit_line",
-      "slot": "alipay_huabei",
-      "display_name": "支付宝花呗"
-    },
-    {
-      "key": "单车骑行卡抵扣",
-      "account": "Assets:Savings:Recharge:HaLuo"
-    },
-    {
-      "key": "借呗",
-      "account": "Liabilities:CreditCard:Web:AliPay:Jiebei",
-      "institution_code": "ALIPAY",
-      "external_kind": "loan",
-      "slot": "alipay_jiebei",
-      "display_name": "支付宝借呗"
-    },
-    {
-      "key": "备用金",
-      "account": "Liabilities:CreditCard:Web:AliPay:Beiyongjin",
-      "institution_code": "ALIPAY",
-      "external_kind": "loan",
-      "slot": "alipay_beiyongjin",
-      "display_name": "支付宝备用金"
     }
   ]
 }

@@ -1,8 +1,8 @@
 {
   "name": "官方支出映射",
   "description": "中国用户常用支出映射",
-  "version": "1.0.2",
-  "update_notes": "移除用户特定与特定银行卡账户引用，运营商充值改指基础账户",
+  "version": "1.0.3",
+  "update_notes": "移除应收应付、阿里云与电信/联通手机号映射，与账户模板 3.0.0 对齐",
   "items": [
     {
       "key": "高跟鞋",
@@ -376,12 +376,6 @@
       "payee": "",
       "account": "Expenses:Culture",
       "currency": ""
-    },
-    {
-      "key": "电信",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Telecom",
-      "currency": "COIN"
     },
     {
       "key": "中国移动",
@@ -1108,15 +1102,6 @@
       "currency": null
     },
     {
-      "key": "阿里云",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:AliCloud",
-      "currency": "COIN",
-      "tags": [
-        "Online"
-      ]
-    },
-    {
       "key": "理发",
       "payee": "",
       "account": "Expenses:Shopping:PersonalCare",
@@ -1231,12 +1216,6 @@
       "currency": ""
     },
     {
-      "key": "联通",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Unicom",
-      "currency": "COIN"
-    },
-    {
       "key": "深圳市腾讯天游科技有限公司",
       "payee": "",
       "account": "Expenses:Culture:Entertainment",
@@ -1246,12 +1225,6 @@
       "key": "装修",
       "payee": "",
       "account": "Expenses:Home:Decoration",
-      "currency": ""
-    },
-    {
-      "key": "借出",
-      "payee": "",
-      "account": "Assets:Receivables:Personal",
       "currency": ""
     },
     {
@@ -1570,12 +1543,6 @@
       "key": "宾馆",
       "payee": "",
       "account": "Expenses:Culture:Travel",
-      "currency": ""
-    },
-    {
-      "key": "借款",
-      "payee": "",
-      "account": "Assets:Receivables:Personal",
       "currency": ""
     },
     {
@@ -3369,12 +3336,6 @@
       "currency": null
     },
     {
-      "key": "还款",
-      "payee": "",
-      "account": "Liabilities:Payables:Personal",
-      "currency": null
-    },
-    {
       "key": "碗伴",
       "payee": "",
       "account": "Expenses:Shopping:Daily",
@@ -3403,12 +3364,6 @@
       "payee": "",
       "account": "Expenses:Shopping:Clothing",
       "currency": null
-    },
-    {
-      "key": "中国电信",
-      "payee": "",
-      "account": "Assets:Savings:Recharge:Operator:Telecom",
-      "currency": "COIN"
     },
     {
       "key": "售货",
@@ -3777,12 +3732,6 @@
       "key": "监控",
       "payee": "",
       "account": "Expenses:Shopping:Digital",
-      "currency": null
-    },
-    {
-      "key": "保证金",
-      "payee": "",
-      "account": "Assets:Receivables:Personal",
       "currency": null
     },
     {

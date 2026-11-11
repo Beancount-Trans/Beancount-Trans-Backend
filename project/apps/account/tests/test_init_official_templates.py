@@ -649,6 +649,34 @@ class TestOfficialTemplateConsistency(SimpleTestCase):
         )
         self.assertEqual(errors, [])
 
+    def test_minimal_asset_liability_loop(self):
+        """新用户资产负债只保留支付宝/微信最小闭环与结构节点。"""
+        account_data = load_official_account_data()
+        paths = {item['account_path'] for item in account_data['items']}
+        removed = {
+            'Assets:Receivables',
+            'Assets:Receivables:Personal',
+            'Assets:Savings:Recharge:AliCloud',
+            'Assets:Savings:Recharge:HaLuo',
+            'Assets:Savings:Recharge:Operator:Telecom',
+            'Assets:Savings:Recharge:Operator:Unicom',
+            'Assets:Savings:Web:XiaoHeBao',
+            'Liabilities:CreditCard:Web',
+            'Liabilities:CreditCard:Web:AliPay',
+            'Liabilities:CreditCard:Web:AliPay:Huabei',
+            'Liabilities:CreditCard:Web:AliPay:Jiebei',
+            'Liabilities:CreditCard:Web:AliPay:Beiyongjin',
+            'Liabilities:Payables',
+            'Liabilities:Payables:Organization',
+            'Liabilities:Payables:Personal',
+        }
+        self.assertTrue(removed.isdisjoint(paths))
+        self.assertTrue({
+            'Assets:Savings:Bank',
+            'Liabilities:CreditCard:Bank',
+            'Assets:Savings:Recharge:Operator:Mobile',
+        }.issubset(paths))
+
     def test_validator_reports_missing_account(self):
         account_data = {
             'items': [{'account_path': 'Expenses:Other'}],
