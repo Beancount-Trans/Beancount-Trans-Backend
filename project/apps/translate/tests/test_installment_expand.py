@@ -60,7 +60,7 @@ def _parsed_from_row(row, *_args, **_kwargs):
         "account": "Liabilities:CreditCard:Bank:CITIC:C6428",
         "account_sign": "-",
         "amount": f"{float(row['amount']):.2f}",
-        "discount": False,
+        "discount": row.get("discount", False),
         "currency": "CNY",
         "selected_expense_key": "公牛",
         "expense_candidates_with_score": [{"key": "公牛", "score": 0.99}],
@@ -110,6 +110,34 @@ class TestExpandParsedEntry:
             "2024-04-01",
             "2024-05-01",
         ]
+
+    def test_alipay_12_period_row_matches_ledger_case(self):
+        row = _alipay_row(
+            transaction_time="2026-01-20 20:21:38",
+            counterparty="苏宁**店",
+            amount=3399.00,
+            payment_method="中信银行信用卡分期(6428) 12期&国家补贴",
+            discount=True,
+        )
+        entries = expand_parsed_entry(_parsed_from_row(row), set())
+
+        assert len(entries) == 13
+        assert entries[0]["discount"] is True
+        assert all(entry["discount"] is False for entry in entries[1:])
+        assert [entry["date"] for entry in entries[1:]] == [
+            f"2026-{month:02d}-20" for month in range(1, 13)
+        ]
+        assert [entry["amount"] for entry in entries[1:]] == ["283.25"] * 12
+
+        formatted = [
+            FormatData.format_instance(entry, config=FormatConfig())
+            for entry in entries
+        ]
+        assert "Income:Other" in formatted[0]
+        for text in formatted[1:]:
+            assert "Liabilities:Payables 283.25 CNY" in text
+            assert "Liabilities:CreditCard:Bank:CITIC:C6428 -283.25 CNY" in text
+            assert "Income:Other" not in text
 
     def test_refund_row_does_not_expand(self):
         row = _alipay_row(

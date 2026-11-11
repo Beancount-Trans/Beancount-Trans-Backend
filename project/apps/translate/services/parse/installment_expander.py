@@ -109,6 +109,8 @@ def expand_installment_entries(parsed_entry: Dict) -> List[Dict]:
         inst["expense"] = PAYABLES_ACCOUNT
         inst["account"] = credit_card
         inst["amount"] = _format_amount(period_amount)
+        # 折扣/补贴只影响原单，每期还款是确定的负债冲销，不应再补收入行
+        inst["discount"] = False
         inst["installment_role"] = "installment"
         inst["installment_period"] = period_idx
         inst["selected_expense_key"] = None
