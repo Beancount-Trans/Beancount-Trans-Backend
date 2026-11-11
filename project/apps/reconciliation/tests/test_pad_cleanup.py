@@ -1,21 +1,29 @@
 """
-无用 pad 自动清理测试
+对账 pad 生命周期测试
 
-覆盖 ReconciliationCommentService.cleanup_unused_pads：
-- 真实交易使余额落入断言容差内（完全一致或相差 0.01）时，注释 reconciliation.bean 中的 pad；
-- 相差超过容差（0.02）时 pad 仍被使用，不注释；
-- 无 reconciliation.bean 或 pad 位于其它文件时不处理；
-- 重复调用幂等。
+覆盖 ReconciliationCommentService：
+- cleanup_unused_pads：真实交易使余额落入断言容差内（完全一致或相差 0.01）时，
+  注释 reconciliation.bean 中的 pad；相差超过容差（0.02）时 pad 仍被使用，不注释；
+  无 reconciliation.bean 或 pad 位于其它文件时不处理；重复调用幂等。
+- repair_broken_balances：balance 断言被更早日期的后补交易打破时，自动补 pad；
+  分摊账户优先复用当次对账写入的 pad 账户；只处理 reconciliation.bean 中的断言。
 """
+from datetime import date
 from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from beancount import loader
 
+from project.apps.account.models import Account
+from project.apps.reconciliation.models import ScheduledTask
 from project.apps.reconciliation.services.reconciliation_comment_service import (
     ReconciliationCommentService,
 )
+
+User = get_user_model()
 
 MAIN_BEAN = (
     'option "operating_currency" "CNY"\n'
@@ -169,3 +177,141 @@ def test_pad_in_other_file_not_touched(build_ledger):
 
     other_content = (user_dir / 'trans' / other_filename).read_text(encoding='utf-8')
     assert PAD_LINE in other_content
+
+
+BACKFILL_SPEND = (
+    '2026-10-06 * "Beancount-Trans" "解析写入"\n'
+    '    Assets:Savings:Web:AliFund -300.00 CNY\n'
+    '    Expenses:Shopping 300.00 CNY\n'
+)
+
+
+def _has_broken_balance(main_path: Path) -> bool:
+    _entries, errors, _options = loader.load_file(str(main_path))
+    return any(
+        str(getattr(e, 'message', '')).startswith('Balance failed for') for e in errors
+    )
+
+
+@pytest.mark.django_db
+def test_repair_adds_pad_for_backfilled_transaction(build_ledger):
+    """断言被更早日期的后补交易打破：自动补 pad 后账本恢复无错，且重复调用幂等。"""
+    username = 'repairuser'
+    user = User.objects.create_user(username=username, password='testpass123')
+    Account.objects.create(account='Assets:Savings:Web:AliFund', owner=user)
+
+    user_dir = build_ledger(
+        username,
+        reconciliation=f'{BALANCE_LINE}\n',
+        collect=BACKFILL_SPEND,
+    )
+    assert _has_broken_balance(user_dir / 'main.bean')
+
+    assert ReconciliationCommentService.repair_broken_balances(user) == 1
+
+    content = (user_dir / 'trans/reconciliation.bean').read_text(encoding='utf-8')
+    assert '2026-10-07 pad Assets:Savings:Web:AliFund Equity:Opening-Balances' in content
+    assert not _has_broken_balance(user_dir / 'main.bean')
+
+    # 幂等：断言已修复，不再补 pad
+    assert ReconciliationCommentService.repair_broken_balances(user) == 0
+
+
+@pytest.mark.django_db
+def test_repair_reuses_stored_pad_account(build_ledger):
+    """分摊账户优先复用当次对账写入的 pad 账户。"""
+    username = 'repairuser2'
+    user = User.objects.create_user(username=username, password='testpass123')
+    account = Account.objects.create(account='Assets:Savings:Web:AliFund', owner=user)
+    ScheduledTask.objects.create(
+        task_type='reconciliation',
+        content_type=ContentType.objects.get_for_model(Account),
+        object_id=account.id,
+        scheduled_date=date(2026, 10, 7),
+        completed_date=date(2026, 10, 7),
+        as_of_date=date(2026, 10, 7),
+        status='completed',
+        reconciliation_entries=[
+            {
+                'type': 'Pad',
+                'date': '2026-10-07',
+                'account': 'Assets:Savings:Web:AliFund',
+                'source_account': 'Equity:Adjustments',
+            }
+        ],
+    )
+
+    user_dir = build_ledger(
+        username,
+        reconciliation=f'{BALANCE_LINE}\n',
+        collect=BACKFILL_SPEND,
+    )
+
+    assert ReconciliationCommentService.repair_broken_balances(user) == 1
+
+    content = (user_dir / 'trans/reconciliation.bean').read_text(encoding='utf-8')
+    assert '2026-10-07 pad Assets:Savings:Web:AliFund Equity:Adjustments' in content
+    assert not _has_broken_balance(user_dir / 'main.bean')
+
+
+MULTI_RECONCILIATION = (
+    '2026-10-08 balance Assets:Savings:Web:AliFund 205.76 CNY\n'
+    '2026-11-08 balance Assets:Savings:Web:AliFund 500.00 CNY\n'
+)
+MULTI_COLLECT = (
+    '2026-10-05 * "Beancount-Trans" "解析写入"\n'
+    '    Assets:Savings:Web:AliFund -100.00 CNY\n'
+    '    Expenses:Shopping 100.00 CNY\n'
+    '\n'
+    '2026-10-06 * "Beancount-Trans" "解析写入"\n'
+    '    Assets:Savings:Web:AliFund 205.76 CNY\n'
+    '    Income:Other -205.76 CNY\n'
+    '\n'
+    '2026-11-06 * "Beancount-Trans" "解析写入"\n'
+    '    Assets:Savings:Web:AliFund 100.00 CNY\n'
+    '    Income:Other -100.00 CNY\n'
+)
+
+
+@pytest.mark.django_db
+def test_repair_fixes_multiple_broken_assertions(build_ledger):
+    """同一账户多条断言被打断时，逐条补 pad 直到全部通过。"""
+    username = 'repairuser4'
+    user = User.objects.create_user(username=username, password='testpass123')
+    Account.objects.create(account='Assets:Savings:Web:AliFund', owner=user)
+
+    user_dir = build_ledger(
+        username,
+        reconciliation=MULTI_RECONCILIATION,
+        collect=MULTI_COLLECT,
+    )
+    assert _has_broken_balance(user_dir / 'main.bean')
+
+    assert ReconciliationCommentService.repair_broken_balances(user) == 2
+    assert not _has_broken_balance(user_dir / 'main.bean')
+
+    content = (user_dir / 'trans/reconciliation.bean').read_text(encoding='utf-8')
+    assert '2026-10-07 pad Assets:Savings:Web:AliFund Equity:Opening-Balances' in content
+    assert '2026-11-07 pad Assets:Savings:Web:AliFund Equity:Opening-Balances' in content
+
+
+@pytest.mark.django_db
+def test_repair_ignores_balance_in_other_file(build_ledger):
+    """只处理 reconciliation.bean 中的断言，其它文件里的失败断言不补 pad。"""
+    username = 'repairuser3'
+    user = User.objects.create_user(username=username, password='testpass123')
+    Account.objects.create(account='Assets:Savings:Web:AliFund', owner=user)
+
+    other = '2026-10-08 balance Assets:Savings:Web:WechatPay 100.00 CNY\n'
+    user_dir = build_ledger(
+        username,
+        reconciliation=RECONCILIATION,
+        collect=_collect_transaction('205.76'),
+        extra_files={'other.bean': other},
+    )
+    assert _has_broken_balance(user_dir / 'main.bean')
+
+    assert ReconciliationCommentService.repair_broken_balances(user) == 0
+
+    content = (user_dir / 'trans/reconciliation.bean').read_text(encoding='utf-8')
+    assert PAD_LINE in content

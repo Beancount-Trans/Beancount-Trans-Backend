@@ -6,6 +6,7 @@
 import logging
 import os
 import re
+from datetime import timedelta
 from typing import Dict, List, Optional, Any, Tuple
 
 from beancount import loader
@@ -322,3 +323,215 @@ class ReconciliationCommentService:
         except Exception as e:
             logger.warning(f"清理无用 pad 失败: {e}", exc_info=True)
             return 0
+
+    @staticmethod
+    def maintain_ledger(user_or_username) -> Dict[str, int]:
+        """解析写入后维护对账条目与账本的一致性（best-effort）
+
+        1. 补 pad：对账写入的 balance 断言被后补（日期更早）的交易打破时，
+           在断言前一天补一条 pad，把未解释的差额记入分摊账户；
+        2. 清 pad：余额落入断言容差后不再起作用的 pad 会被注释掉。
+
+        整体不抛异常，失败只记录日志，避免影响调用方的写入流程。
+
+        Returns:
+            {'pads_added': 补 pad 条数, 'pads_commented': 注释 pad 行数}
+        """
+        pads_added = ReconciliationCommentService.repair_broken_balances(user_or_username)
+        pads_commented = ReconciliationCommentService.cleanup_unused_pads(user_or_username)
+        return {'pads_added': pads_added, 'pads_commented': pads_commented}
+
+    @staticmethod
+    def repair_broken_balances(user_or_username, max_rounds: int = 20) -> int:
+        """为被后补交易打破的对账 balance 断言补 pad（best-effort）
+
+        只处理 trans/reconciliation.bean 中的断言。Beancount 按日期而非文件行序
+        配对 pad 与 balance，因此新增 pad 直接追加到文件末尾即可生效；若补 pad 后
+        断言仍然失败（例如 pad 账户与断言账户相同），则回滚本次追加并跳过。
+
+        Args:
+            user_or_username: User 对象或 username 字符串
+            max_rounds: 最多补多少条 pad，防止异常数据导致死循环
+
+        Returns:
+            实际补上的 pad 条数；无需修复或失败时返回 0
+        """
+        try:
+            reconciliation_path = BeanFileManager.get_reconciliation_bean_path(user_or_username)
+            if not os.path.exists(reconciliation_path):
+                return 0
+
+            main_path = BeanFileManager.get_main_bean_path(user_or_username)
+            if not os.path.exists(main_path):
+                return 0
+
+            user = ReconciliationCommentService._resolve_user(user_or_username)
+            if user is None:
+                return 0
+
+            target_path = os.path.abspath(os.path.realpath(reconciliation_path))
+            added = 0
+            skipped = set()
+            for _ in range(max(1, max_rounds)):
+                _entries, errors, _options = loader.load_file(main_path)
+                broken = ReconciliationCommentService._find_broken_balance(
+                    errors, target_path, skipped
+                )
+                if broken is None:
+                    break
+
+                key = (broken.account, broken.date)
+                pad_account = ReconciliationCommentService._resolve_pad_account(
+                    user, broken.account, broken.date
+                )
+                if not pad_account or pad_account == broken.account:
+                    logger.warning(
+                        "无法为被打断的 balance 断言找到可用的分摊账户，跳过: "
+                        f"{broken.date} {broken.account}"
+                    )
+                    skipped.add(key)
+                    continue
+
+                pad_date = broken.date - timedelta(days=1)
+                text = (
+                    f'; 自动补 pad：balance 断言 {broken.date} {broken.account} 被后补交易打破\n'
+                    f'{pad_date} pad {broken.account} {pad_account}\n'
+                )
+                size_before = os.path.getsize(reconciliation_path)
+                if not ReconciliationCommentService._append_text(reconciliation_path, text):
+                    break
+
+                _entries2, errors2, _options2 = loader.load_file(main_path)
+                if ReconciliationCommentService._has_broken_balance(
+                    errors2, target_path, broken
+                ):
+                    # 补 pad 没能修复断言，回滚本次追加，避免污染账本
+                    os.truncate(reconciliation_path, size_before)
+                    logger.warning(
+                        f"补 pad 后 balance 断言仍失败，已回滚: "
+                        f"{broken.date} {broken.account} -> {pad_account}"
+                    )
+                    skipped.add(key)
+                    continue
+
+                logger.info(
+                    f"已为被打断的 balance 断言补 pad: "
+                    f"{pad_date} pad {broken.account} {pad_account}"
+                )
+                added += 1
+
+            return added
+        except Exception as e:
+            logger.warning(f"补对账 pad 失败: {e}", exc_info=True)
+            return 0
+
+    @staticmethod
+    def _broken_balance_entries(errors, target_path: str) -> List[Balance]:
+        """从 loader 错误中筛出位于 reconciliation.bean 的失败 balance 断言"""
+        broken: List[Balance] = []
+        for error in errors:
+            message = getattr(error, 'message', '') or ''
+            if not message.startswith('Balance failed for'):
+                continue
+            entry = getattr(error, 'entry', None)
+            if not isinstance(entry, Balance):
+                continue
+            meta = getattr(entry, 'meta', None) or {}
+            filename = meta.get('filename')
+            if not filename:
+                continue
+            if os.path.abspath(os.path.realpath(filename)) != target_path:
+                continue
+            broken.append(entry)
+        return broken
+
+    @staticmethod
+    def _find_broken_balance(
+        errors, target_path: str, skipped: Optional[set] = None
+    ) -> Optional[Balance]:
+        """取出最早的、尚未跳过的失败 balance 断言"""
+        skipped = skipped or set()
+        failed = ReconciliationCommentService._broken_balance_entries(errors, target_path)
+        candidates = [
+            entry for entry in failed if (entry.account, entry.date) not in skipped
+        ]
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda entry: (entry.date, (getattr(entry, 'meta', None) or {}).get('lineno', 0)),
+        )
+
+    @staticmethod
+    def _has_broken_balance(errors, target_path: str, balance: Balance) -> bool:
+        """判断指定 balance 断言是否仍然失败"""
+        return any(
+            entry.account == balance.account and entry.date == balance.date
+            for entry in ReconciliationCommentService._broken_balance_entries(errors, target_path)
+        )
+
+    @staticmethod
+    def _resolve_user(user_or_username):
+        """把 username 解析为 User 对象；已是 User 时原样返回"""
+        from django.contrib.auth import get_user_model
+
+        if isinstance(user_or_username, str):
+            return get_user_model().objects.filter(username=user_or_username).first()
+        return user_or_username
+
+    @staticmethod
+    def _resolve_pad_account(user, account_name: str, balance_date) -> Optional[str]:
+        """确定被打断的 balance 断言应记入哪个分摊账户
+
+        优先复用当次对账写入的 pad / 差额分配账户；取不到时，首次对账回落到
+        Equity:Opening-Balances，其余回落到用户配置的兜底账户。
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from project.apps.account.models import Account
+        from project.apps.reconciliation.models import ScheduledTask
+        from project.apps.translate.models import FormatConfig
+
+        account = Account.objects.filter(owner=user, account=account_name).first()
+        if account is None:
+            return None
+
+        as_of_date = balance_date - timedelta(days=1)
+        content_type = ContentType.objects.get_for_model(Account)
+        completed = ScheduledTask.objects.filter(
+            task_type='reconciliation',
+            content_type=content_type,
+            object_id=account.id,
+            status='completed',
+        )
+        task = completed.filter(as_of_date=as_of_date).order_by('-completed_date', '-id').first()
+        if task:
+            for entry in task.reconciliation_entries or []:
+                if entry.get('type') == 'Pad' and entry.get('source_account'):
+                    return entry['source_account']
+            items = task.reconciliation_transaction_items or []
+            for item in items:
+                if item.get('is_auto') and item.get('account'):
+                    return item['account']
+            for item in items:
+                if item.get('account'):
+                    return item['account']
+
+        if not completed.filter(as_of_date__lt=as_of_date).exists():
+            return 'Equity:Opening-Balances'
+        config = FormatConfig.get_user_config(user)
+        return config.reconciliation_fallback_account or 'Equity:Adjustments'
+
+    @staticmethod
+    def _append_text(file_path: str, text: str) -> bool:
+        """在文件末尾追加文本（自动补齐必要的换行）"""
+        if not text:
+            return False
+        needs_newline = False
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            with open(file_path, 'rb') as f:
+                f.seek(-1, os.SEEK_END)
+                needs_newline = f.read(1) != b'\n'
+        payload = ('\n' if needs_newline else '') + text
+        with open(file_path, 'a', encoding='utf-8') as f:
+            f.write(payload)
+        return True

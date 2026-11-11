@@ -459,7 +459,10 @@ class ReconciliationService:
             message = f"已注释 {entries_commented} 行"
         else:
             message = "该记录未存储条目信息，无法自动注释账本，请手动检查 trans/reconciliation.bean"
-        
+
+        # 注释断言后，此前自动补的 pad 可能失去后续断言而变为无用 pad，一并清理
+        ReconciliationCommentService.cleanup_unused_pads(user)
+
         # 2. 更新任务状态
         task.status = 'revoked'
         task.save(update_fields=['status', 'modified'])
