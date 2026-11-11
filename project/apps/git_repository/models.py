@@ -122,7 +122,7 @@ class GitRepository(BaseModel):
         help_text="是否已取消同步（暂停自动拉取）"
     )
     auto_import_ledger_accounts = models.BooleanField(
-        default=False,
+        default=True,
         help_text="同步后是否自动导入账本中显式 open、平台缺失的账户"
     )
 

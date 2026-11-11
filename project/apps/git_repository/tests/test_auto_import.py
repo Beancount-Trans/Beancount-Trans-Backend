@@ -1,6 +1,6 @@
 """同步后自动导入账本新增账户
 
-覆盖开关默认关闭、开启后只导入显式 open 的账户，以及设置接口。
+覆盖开关默认开启、关闭后跳过导入、开启后只导入显式 open 的账户，以及设置接口。
 所有测试将 settings.ASSETS_BASE_PATH 指向 tmp_path，避免污染真实 Assets 目录。
 """
 
@@ -66,15 +66,24 @@ LEDGER = '2000-01-01 open Assets:Wallet CNY\n'
 
 @patch('project.apps.git_repository.services.PlatformGitService._pull_repository')
 def test_sync_skips_import_when_disabled(mock_pull, monkeypatch, tmp_path):
-    user, _git_repo, svc, _path = _prepare(
+    user, git_repo, svc, _path = _prepare(
         monkeypatch, tmp_path, 'auto_off_user', 'auto-off-assets', LEDGER
     )
+    git_repo.auto_import_ledger_accounts = False
+    git_repo.save()
 
     result = svc.sync_repository(user)
 
     assert result['status'] == 'success'
     assert result['imported_accounts'] == []
     assert not Account.objects.filter(owner=user, account='Assets:Wallet').exists()
+
+
+def test_auto_import_enabled_by_default():
+    user = _create_user('auto_default_user')
+    git_repo = _create_git_repo(user, 'auto-default-assets')
+
+    assert git_repo.auto_import_ledger_accounts is True
 
 
 @patch('project.apps.git_repository.services.PlatformGitService._pull_repository')

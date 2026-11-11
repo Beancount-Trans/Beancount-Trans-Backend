@@ -394,7 +394,7 @@ class PlatformGitService:
                     error['message'] for error in dedupe_result.residual_errors
                 )
 
-            # 4.2 可选：把账本中显式 open、平台缺失的账户导入平台（默认关闭）
+            # 4.2 可选：把账本中显式 open、平台缺失的账户导入平台（默认开启）
             imported_accounts: list = []
             if git_repo.auto_import_ledger_accounts:
                 from project.apps.account.account_reconcile import (
