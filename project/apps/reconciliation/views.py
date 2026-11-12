@@ -117,7 +117,7 @@ class ScheduledTaskViewSet(ModelViewSet):
         
         if task.task_type != 'reconciliation':
             return Response(
-                {'error': '该待办不是对账任务'},
+                {'error': '该待办不是对账类型'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -230,7 +230,7 @@ class ScheduledTaskViewSet(ModelViewSet):
         
         if task.task_type != 'reconciliation':
             return Response(
-                {'error': '该待办不是对账任务'},
+                {'error': '该待办不是对账类型'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -274,13 +274,13 @@ class ScheduledTaskViewSet(ModelViewSet):
         
         if task.task_type != 'reconciliation':
             return Response(
-                {'error': '该待办不是对账任务'},
+                {'error': '该待办不是对账类型'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         if task.status != 'completed':
             return Response(
-                {'error': '只能撤销已完成的对账任务'},
+                {'error': '只能撤销已完成的对账待办'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

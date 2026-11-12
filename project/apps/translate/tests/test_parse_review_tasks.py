@@ -318,12 +318,12 @@ class TestParseSingleFileTask:
         # 验证返回结果：空解析结果视为失败，不写入
         assert result['status'] == 'failed'
         assert result['file_id'] == parse_file.file_id
-        assert result.get('error') == '未解析到有效交易记录'
+        assert result.get('error') == '未解析到有效条目'
 
         # 验证 ParseFile 状态更新为 failed
         parse_file.refresh_from_db()
         assert parse_file.status == 'failed'
-        assert parse_file.error_message == '未解析到有效交易记录'
+        assert parse_file.error_message == '未解析到有效条目'
 
         # 统一改造后：不再创建任何 entry_review 待办
         assert not ScheduledTask.objects.filter(

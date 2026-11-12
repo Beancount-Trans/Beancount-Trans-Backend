@@ -296,7 +296,7 @@ class TestEntryReviewReparseView:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == '待办任务已完成或已取消'
+        assert response.data['error'] == '该待办已完成或已取消'
 
     @patch('project.apps.translate.views.views.resolve_refund_peer_for_row', return_value=None)
     @patch('project.apps.translate.views.views.get_user_config')
@@ -1038,7 +1038,7 @@ class TestEntryReviewConfirmView:
         response = self.client.post('/api/translate/entry-review/confirm')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == '待办任务已完成或已取消'
+        assert response.data['error'] == '该待办已完成或已取消'
 
 
 @pytest.mark.django_db
@@ -1087,7 +1087,7 @@ class TestEntryReviewReparseAllView:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == '待办任务已完成或已取消'
+        assert response.data['error'] == '该待办已完成或已取消'
 
     def test_reparse_all_file_not_found(self, user, entry_review_task):
         """file_id 对应文件不存在"""
@@ -1423,7 +1423,7 @@ class TestEntryReviewEditViewCopilot(_CopilotApiTestBase):
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == '待办任务已完成或已取消'
+        assert response.data['error'] == '该待办已完成或已取消'
 
 
 @pytest.mark.django_db

@@ -345,7 +345,7 @@ class ReconciliationExecuteSerializer(serializers.Serializer):
         # 获取任务和账户信息
         task = self.context.get('task')
         if not task:
-            raise serializers.ValidationError('未提供待办任务')
+            raise serializers.ValidationError('未提供待办')
         
         account = task.content_object
         
@@ -369,7 +369,7 @@ class ReconciliationExecuteSerializer(serializers.Serializer):
         if max_completed_as_of_date:
             if as_of_date == max_completed_as_of_date:
                 raise serializers.ValidationError(
-                    f'该账户已有 {as_of_date} 的对账记录，不允许重复对账同一日期'
+                    f'该账户在 {as_of_date} 已完成对账，不允许重复对账同一日期'
                 )
             elif as_of_date < max_completed_as_of_date:
                 raise serializers.ValidationError(

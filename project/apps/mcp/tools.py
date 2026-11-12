@@ -105,7 +105,7 @@ class JournalResult(BaseModel):
 READ_LEDGER_FILE_DESCRIPTION = (
     '读取当前用户账本目录内的单个 .bean 文件原文。'
     'path 为相对账本根目录的路径（如 main.bean、2026/01/xxx.bean），'
-    '用于查看账户结构、include 关系与原始交易记录；'
+    '用于查看账户结构、include 关系与原始交易条目；'
     '需要统计或筛选时请改用 run_bql，不要靠读取文件人工汇总。'
 )
 

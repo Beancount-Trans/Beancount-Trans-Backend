@@ -171,7 +171,7 @@ class TestUploadParseReviewView:
         response = self._upload(context={'formatted_data': []})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data['error'] == '未解析到有效交易记录'
+        assert response.data['error'] == '未解析到有效条目'
         assert EntryReviewQueueService.is_empty(user.id) is True
         assert CopilotBookkeepingService.has_staging(user.id) is False
 

@@ -125,7 +125,7 @@ def parse_single_file_task(self, file_id, user_id, args):
         # 格式与内容均支持但过滤后无有效交易：不创建解析待办
         if len(formatted_data) == 0:
             parse_file.status = 'failed'
-            parse_file.error_message = '未解析到有效交易记录'
+            parse_file.error_message = '未解析到有效条目'
             parse_file.save()
             _record_parse_usage(task_id, user_id, 'failed', error=parse_file.error_message)
             cache.set(f'task_status:{task_id}', {

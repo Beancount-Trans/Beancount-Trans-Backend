@@ -274,7 +274,7 @@ class ReparseEntryView(APIView):
         cache_data = cache.get(cache_key)
 
         if not cache_data:
-            return Response({'error': '缓存已过期或记录不存在'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': '缓存已过期或条目不存在'}, status=status.HTTP_404_NOT_FOUND)
 
         original_row = cache_data['original_row']
         cached_parsed = cache_data.get('parsed_entry') or {}
@@ -594,7 +594,7 @@ class UploadParseReviewView(APIView):
             entries = self._build_review_entries(formatted_data, uploaded_file.name)
             if not entries:
                 return Response(
-                    {'error': '未解析到有效交易记录'},
+                    {'error': '未解析到有效条目'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -846,7 +846,7 @@ class EntryReviewViewSet(APIView):
         from project.apps.translate.services.parse_review_service import ParseReviewService
         task = self.get_review_task(request)
         if task is None or task.status != 'pending':
-            return Response({'error': '待办任务已完成或已取消'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': '该待办已完成或已取消'}, status=status.HTTP_400_BAD_REQUEST)
         if parse_file.status != 'pending_review':
             return Response({'error': '该文件当前不可审核'}, status=status.HTTP_400_BAD_REQUEST)
         cached_data = ParseReviewService.get_parse_result(parse_file.file_id)
@@ -871,7 +871,7 @@ class EntryReviewViewSet(APIView):
 
         task = self.get_review_task(request)
         if task is None or task.status != 'pending':
-            return Response({'error': '待办任务已完成或已取消'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': '该待办已完成或已取消'}, status=status.HTTP_400_BAD_REQUEST)
         cached_data = CopilotBookkeepingService.get_staging_data(request.user.id)
         if not cached_data:
             return Response(
@@ -893,7 +893,7 @@ class EntryReviewViewSet(APIView):
 
         task = self.get_review_task(request)
         if task is None or task.status != 'pending':
-            return Response({'error': '待办任务已完成或已取消'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': '该待办已完成或已取消'}, status=status.HTTP_400_BAD_REQUEST)
         if not RecurringBookkeepingService.has_staging(request.user.id):
             return Response(
                 {'error': '循环待办待审核条目不存在或已失效'},
@@ -1538,7 +1538,7 @@ class EntryReviewConfirmView(EntryReviewViewSet):
         task = self.get_review_task(request)
         if task is None or task.status != 'pending':
             return Response(
-                {'error': '待办任务已完成或已取消'},
+                {'error': '该待办已完成或已取消'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -1868,7 +1868,7 @@ class EntryReviewReparseAllView(EntryReviewViewSet):
         task = self.get_review_task(request)
         if task is None or task.status != 'pending':
             return Response(
-                {'error': '待办任务已完成或已取消'},
+                {'error': '该待办已完成或已取消'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

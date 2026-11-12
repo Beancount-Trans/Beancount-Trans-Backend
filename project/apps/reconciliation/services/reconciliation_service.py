@@ -420,7 +420,7 @@ class ReconciliationService:
         if not isinstance(account, Account):
             raise ValueError("待办任务关联的对象不是 Account 类型")
         if task.task_type != 'reconciliation' or task.status != 'completed':
-            raise ValueError("只能撤销已完成的对账任务")
+            raise ValueError("只能撤销已完成的对账待办")
 
         # 只允许撤销最近一次：该账户下按 as_of_date 降序的第一条 completed 必须是当前 task
         content_type = ContentType.objects.get_for_model(Account)
@@ -458,7 +458,7 @@ class ReconciliationService:
             )
             message = f"已注释 {entries_commented} 行"
         else:
-            message = "该记录未存储条目信息，无法自动注释账本，请手动检查 trans/reconciliation.bean"
+            message = "该次对账未存储条目信息，无法自动注释账本，请手动检查 trans/reconciliation.bean"
 
         # 注释断言后，此前自动补的 pad 可能失去后续断言而变为无用 pad，一并清理
         ReconciliationCommentService.cleanup_unused_pads(user)
