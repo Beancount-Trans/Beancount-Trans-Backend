@@ -1800,28 +1800,6 @@
         }
       }
     },
-    "/api/auth/bindings/bind-email/": {
-      "post": {
-        "operationId": "auth_bindings_bind_email_create",
-        "description": "绑定邮箱（需验证码）",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "jwtAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "No response body"
-          }
-        }
-      }
-    },
     "/api/auth/bindings/bind-phone/": {
       "post": {
         "operationId": "auth_bindings_bind_phone_create",
@@ -1839,50 +1817,6 @@
         ],
         "responses": {
           "200": {
-            "description": "No response body"
-          }
-        }
-      }
-    },
-    "/api/auth/bindings/send-email-code/": {
-      "post": {
-        "operationId": "auth_bindings_send_email_code_create",
-        "description": "发送邮箱绑定验证码",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "jwtAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "No response body"
-          }
-        }
-      }
-    },
-    "/api/auth/bindings/unbind-email/": {
-      "delete": {
-        "operationId": "auth_bindings_unbind_email_destroy",
-        "description": "解绑邮箱",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "jwtAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ],
-        "responses": {
-          "204": {
             "description": "No response body"
           }
         }
@@ -1937,52 +1871,6 @@
         ],
         "responses": {
           "204": {
-            "description": "No response body"
-          }
-        }
-      }
-    },
-    "/api/auth/email/login-by-code/": {
-      "post": {
-        "operationId": "auth_email_login_by_code_create",
-        "description": "邮箱验证码登录",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "jwtAuth": []
-          },
-          {
-            "Bearer": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "description": "No response body"
-          }
-        }
-      }
-    },
-    "/api/auth/email/send-code/": {
-      "post": {
-        "operationId": "auth_email_send_code_create",
-        "description": "发送邮箱验证码用于登录",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "jwtAuth": []
-          },
-          {
-            "Bearer": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
             "description": "No response body"
           }
         }

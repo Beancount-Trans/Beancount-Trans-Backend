@@ -163,65 +163,6 @@ class UserProfile(BaseModel):
 
         return True
 
-    # ========== 邮箱验证码（用于邮箱绑定） ==========
-    @staticmethod
-    def generate_email_code():
-        """生成6位数字邮箱验证码"""
-        return ''.join([str(random.randint(0, 9)) for _ in range(6)])
-
-    @staticmethod
-    def get_email_code_cache_key(email: str) -> str:
-        return f"email:code:{email}"
-
-    @staticmethod
-    def get_email_resend_cache_key(email: str) -> str:
-        return f"email:resend:{email}"
-
-    @staticmethod
-    def can_send_email(email: str) -> bool:
-        return not cache.get(UserProfile.get_email_resend_cache_key(email))
-
-    @staticmethod
-    def store_email_code(email: str, code: str) -> None:
-        expire_seconds = getattr(settings, 'EMAIL_CODE_EXPIRE_SECONDS', 300)
-        cache.set(UserProfile.get_email_code_cache_key(email), code, expire_seconds)
-        resend_interval = getattr(settings, 'EMAIL_CODE_RESEND_INTERVAL', 60)
-        cache.set(UserProfile.get_email_resend_cache_key(email), '1', resend_interval)
-
-    @staticmethod
-    def verify_email_code(email: str, code: str) -> bool:
-        cache_key = UserProfile.get_email_code_cache_key(email)
-        stored_code = cache.get(cache_key)
-        if not stored_code:
-            logger.warning(f"邮箱验证码不存在或已过期: {email}")
-            return False
-        if str(stored_code) == str(code):
-            cache.delete(cache_key)
-            return True
-        logger.warning(f"邮箱验证码不匹配: {email}")
-        return False
-
-    @staticmethod
-    def send_email_code(email: str) -> bool:
-        from django.core.mail import send_mail
-        if not email:
-            raise ValueError("邮箱不能为空")
-        if not UserProfile.can_send_email(email):
-            resend_interval = getattr(settings, 'EMAIL_CODE_RESEND_INTERVAL', 60)
-            raise ValueError(f"发送过于频繁，请{resend_interval}秒后再试")
-        code = UserProfile.generate_email_code()
-        UserProfile.store_email_code(email, code)
-        subject = getattr(settings, 'EMAIL_BIND_SUBJECT', '邮箱绑定验证码')
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
-        message = f"您的验证码是：{code}，{getattr(settings, 'EMAIL_CODE_EXPIRE_SECONDS', 300)}秒内有效。"
-        try:
-            send_mail(subject, message, from_email, [email], fail_silently=False)
-            return True
-        except Exception as e:
-            cache.delete(UserProfile.get_email_code_cache_key(email))
-            logger.error(f"发送邮箱验证码失败: {email}, {e}")
-            raise
-
 
 class PersonalAccessToken(BaseModel):
     """长期只读访问令牌（供 MCP 客户端等外部程序使用）。

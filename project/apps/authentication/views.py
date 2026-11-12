@@ -29,10 +29,6 @@ from project.apps.authentication.serializers import (
     UserUpdateSerializer,
     TOTPEnableSerializer,
     TOTPDisableSerializer,
-    EmailSendCodeSerializer,
-    EmailBindSerializer,
-    EmailLoginSendCodeSerializer,
-    EmailLoginSerializer,
     UsernameLoginByPasswordSerializer,
     PersonalAccessTokenSerializer,
     PersonalAccessTokenCreateSerializer,
@@ -456,88 +452,6 @@ class UsernameAuthViewSet(viewsets.GenericViewSet):
             }, status=status.HTTP_401_UNAUTHORIZED)
 
 
-class EmailAuthViewSet(viewsets.GenericViewSet):
-    """邮箱验证码认证视图集"""
-    authentication_classes = [JWTAuthentication]  # 只使用JWT认证，避免CSRF检查
-    permission_classes = [AllowAny]
-
-    @action(detail=False, methods=['post'], url_path='send-code')
-    def send_code(self, request):
-        """发送邮箱验证码用于登录"""
-        serializer = EmailLoginSendCodeSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        email = serializer.validated_data['email']
-
-        try:
-            UserProfile.send_email_code(email)
-            logger.info(f"邮箱验证码发送成功: {email}")
-            return Response({
-                'message': '验证码已发送',
-                'email': email
-            }, status=status.HTTP_200_OK)
-        except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.error(f"发送邮箱验证码失败: {email}, {str(e)}")
-            return Response({'error': '发送验证码失败，请稍后重试'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    @action(detail=False, methods=['post'], url_path='login-by-code')
-    def login_by_code(self, request):
-        """邮箱验证码登录"""
-        serializer = EmailLoginSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        email = serializer.validated_data['email']
-        code = serializer.validated_data['code']
-
-        if not UserProfile.verify_email_code(email, code):
-            return Response({'error': '验证码错误或已过期'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        user = serializer.get_user()
-        if not user:
-            return Response({'error': '该邮箱未注册'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            user.last_login = timezone.now()
-            user.save(update_fields=['last_login'])
-
-            refresh = _issue_refresh_token(user)
-
-            logger.info(f"用户 {user.username} 通过邮箱验证码登录成功")
-
-            try:
-                profile = user.profile
-            except UserProfile.DoesNotExist:
-                profile = UserProfile.objects.create(user=user)
-
-            requires_2fa = profile.has_2fa_enabled()
-
-            response_data = {
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'phone_number': str(profile.phone_number) if profile.phone_number else None
-                },
-                'requires_2fa': requires_2fa
-            }
-
-            if requires_2fa:
-                response_data['2fa_methods'] = []
-                if profile.totp_enabled:
-                    response_data['2fa_methods'].append('totp')
-
-            return Response(response_data, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(f"邮箱验证码登录失败: {email}, {str(e)}")
-            return Response({'error': '登录失败，请稍后重试'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 class AccountBindingViewSet(viewsets.GenericViewSet):
     """账号绑定管理视图集"""
     authentication_classes = [JWTAuthentication]  # 只使用JWT认证，避免CSRF检查
@@ -570,48 +484,6 @@ class AccountBindingViewSet(viewsets.GenericViewSet):
         }
 
         return Response(data, status=status.HTTP_200_OK)
-
-    @action(detail=False, methods=['post'], url_path='send-email-code')
-    def send_email_code(self, request):
-        """发送邮箱绑定验证码"""
-        serializer = EmailSendCodeSerializer(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        email = serializer.validated_data['email']
-        try:
-            UserProfile.send_email_code(email)
-            return Response({'message': '验证码已发送'}, status=status.HTTP_200_OK)
-        except ValueError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.error(f"发送邮箱验证码失败: {email}, {e}")
-            return Response({'error': '发送失败'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    @action(detail=False, methods=['post'], url_path='bind-email')
-    def bind_email(self, request):
-        """绑定邮箱（需验证码）"""
-        serializer = EmailBindSerializer(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        email = serializer.validated_data['email']
-        code = serializer.validated_data['code']
-        if not UserProfile.verify_email_code(email, code):
-            return Response({'error': '验证码错误或已过期'}, status=status.HTTP_400_BAD_REQUEST)
-        # 设置用户邮箱
-        user = request.user
-        user.email = email
-        user.save(update_fields=['email'])
-        logger.info(f"用户 {user.username} 绑定邮箱成功: {email}")
-        return Response({'message': '邮箱绑定成功', 'email': email}, status=status.HTTP_200_OK)
-
-    @action(detail=False, methods=['delete'], url_path='unbind-email')
-    def unbind_email(self, request):
-        """解绑邮箱"""
-        user = request.user
-        user.email = ''
-        user.save(update_fields=['email'])
-        logger.info(f"用户 {user.username} 解绑邮箱成功")
-        return Response({'message': '邮箱已解绑'}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='bind-phone')
     def bind_phone(self, request):
@@ -803,18 +675,15 @@ class UserProfileViewSet(viewsets.GenericViewSet):
         3. 删除 OSS/MinIO 文件
         4. 删除文件系统 Assets 目录
         5. 删除数据库记录
-        6. 清理 Redis 缓存
         """
         user = request.user
         username = user.username
-        user_email = getattr(user, 'email', None)
 
         try:
             import os
             import shutil
             from django.db import transaction
             from django.apps import apps
-            from django.core.cache import cache
             from django.conf import settings
             from pathlib import Path
 
@@ -967,16 +836,6 @@ class UserProfileViewSet(viewsets.GenericViewSet):
 
                 # 删除用户（最后删除）
                 user.delete()
-
-            # ========== 6. 清理 Redis 缓存 ==========
-            try:
-                if user_email:
-                    # 清理邮箱验证码缓存
-                    cache.delete(UserProfile.get_email_code_cache_key(user_email))
-                    cache.delete(UserProfile.get_email_resend_cache_key(user_email))
-                    logger.info(f"已清理用户缓存: {user_email}")
-            except Exception as e:
-                logger.warning(f"清理 Redis 缓存时出错: {str(e)}")
 
             logger.info(f"用户 {username} 的账户已完全删除")
 

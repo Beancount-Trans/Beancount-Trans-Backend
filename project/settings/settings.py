@@ -370,13 +370,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # 用户上传文件的存储目�
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'  # 模型的默认主键字段类型，AutoField or BigAutoField
 
 # ========== Email Settings ==========
-# 默认发件邮箱地址（必配）
+# 框架级邮件后端配置（allauth 的邮箱验证/重置密码等能力仍可能发信）
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@example.com')
-
-# 邮件验证码配置
-EMAIL_BIND_SUBJECT = os.environ.get('EMAIL_BIND_SUBJECT', '邮箱绑定验证码')
-EMAIL_CODE_EXPIRE_SECONDS = int(os.environ.get('EMAIL_CODE_EXPIRE_SECONDS', '300'))  # 5分钟
-EMAIL_CODE_RESEND_INTERVAL = int(os.environ.get('EMAIL_CODE_RESEND_INTERVAL', '60'))  # 60秒
 
 # 邮件后端：开发默认使用控制台（打印到控制台），生产使用SMTP
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')

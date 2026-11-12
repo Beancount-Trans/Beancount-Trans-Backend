@@ -65,13 +65,6 @@ class TestUserProfile:
         assert len(code) == 6
         assert code.isdigit()
 
-    def test_generate_email_code(self):
-        """测试生成邮箱验证码（6位数字）"""
-        code = UserProfile.generate_email_code()
-
-        assert len(code) == 6
-        assert code.isdigit()
-
     def test_get_sms_cache_key(self):
         """测试获取短信验证码缓存键"""
         phone_number = '+8613800138102'
@@ -84,13 +77,6 @@ class TestUserProfile:
         # 使用参数
         key2 = self.user.profile.get_sms_cache_key('+8613800138103')
         assert key2 == 'sms:code:+8613800138103'
-
-    def test_get_email_cache_key(self):
-        """测试获取邮箱验证码缓存键"""
-        email = 'test@example.com'
-        key = UserProfile.get_email_code_cache_key(email)
-
-        assert key == f'email:code:{email}'
 
     def test_can_send_sms_allowed(self):
         """测试可以发送短信"""
@@ -123,18 +109,6 @@ class TestUserProfile:
         assert result is True
         # 验证验证码已存储
         cache_key = self.user.profile.get_sms_cache_key(phone_number)
-        stored_code = cache.get(cache_key)
-        assert stored_code == code
-
-    def test_store_email_code(self):
-        """测试存储邮箱验证码"""
-        email = 'test@example.com'
-        code = '123456'
-
-        UserProfile.store_email_code(email, code)
-
-        # 验证验证码已存储
-        cache_key = UserProfile.get_email_code_cache_key(email)
         stored_code = cache.get(cache_key)
         assert stored_code == code
 
@@ -177,31 +151,6 @@ class TestUserProfile:
 
         assert result is False
 
-    def test_verify_email_code_success(self):
-        """测试验证邮箱验证码成功"""
-        email = 'test@example.com'
-        code = '123456'
-
-        UserProfile.store_email_code(email, code)
-
-        result = UserProfile.verify_email_code(email, code)
-
-        assert result is True
-        # 验证验证码已被删除
-        cache_key = UserProfile.get_email_code_cache_key(email)
-        assert cache.get(cache_key) is None
-
-    def test_verify_email_code_wrong(self):
-        """测试邮箱验证码错误"""
-        email = 'test@example.com'
-        code = '123456'
-
-        UserProfile.store_email_code(email, code)
-
-        result = UserProfile.verify_email_code(email, '654321')
-
-        assert result is False
-
     def test_send_sms_code_success(self):
         """测试发送短信验证码成功"""
         from unittest.mock import patch, MagicMock
@@ -232,48 +181,4 @@ class TestUserProfile:
             self.user.profile.send_sms_code(phone_number)
 
         assert '发送过于频繁' in str(exc_info.value)
-
-    def test_send_email_code_success(self):
-        """测试发送邮箱验证码成功"""
-        from unittest.mock import patch
-        from django.core.mail import send_mail
-
-        email = 'test@example.com'
-
-        with patch('django.core.mail.send_mail') as mock_send_mail:
-            mock_send_mail.return_value = 1
-
-            result = UserProfile.send_email_code(email)
-
-            assert result is True
-            mock_send_mail.assert_called_once()
-
-    def test_send_email_code_rate_limited(self):
-        """测试发送邮箱验证码频率限制"""
-        email = 'test@example.com'
-
-        # 设置重发限制
-        resend_key = UserProfile.get_email_resend_cache_key(email)
-        cache.set(resend_key, '1', 60)
-
-        with pytest.raises(ValueError) as exc_info:
-            UserProfile.send_email_code(email)
-
-        assert '发送过于频繁' in str(exc_info.value)
-
-    def test_send_email_code_failure(self):
-        """测试发送邮箱验证码失败（清理缓存）"""
-        from unittest.mock import patch
-
-        email = 'test@example.com'
-
-        with patch('django.core.mail.send_mail') as mock_send_mail:
-            mock_send_mail.side_effect = Exception("SMTP Error")
-
-            with pytest.raises(Exception):
-                UserProfile.send_email_code(email)
-
-            # 验证缓存已清理
-            cache_key = UserProfile.get_email_code_cache_key(email)
-            assert cache.get(cache_key) is None
 

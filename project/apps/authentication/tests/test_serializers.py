@@ -8,8 +8,6 @@ from project.apps.authentication.serializers import (
     PhoneLoginByCodeSerializer,
     PhoneRegisterSerializer,
     PhoneBindingSerializer,
-    EmailSendCodeSerializer,
-    EmailBindSerializer,
     UserUpdateSerializer,
     TOTPEnableSerializer,
 )
@@ -123,25 +121,6 @@ class TestSerializers:
             # 如果通过了，可能是密码验证器配置问题
             # 但至少验证了序列化器流程正常
             pass
-
-    def test_email_bind_duplicate_email(self):
-        """测试邮箱已被占用"""
-        # 创建已存在的邮箱
-        User.objects.create_user(
-            username='otheruser',
-            password='TestPass123!',
-            email='existing@example.com'
-        )
-
-        request = self.factory.get('/')
-        request.user = self.user
-
-        serializer = EmailSendCodeSerializer(
-            data={'email': 'existing@example.com'},
-            context={'request': request}
-        )
-        assert serializer.is_valid() is False
-        assert '已被其他账户使用' in str(serializer.errors)
 
     def test_username_update_duplicate(self):
         """测试用户名更新时冲突"""

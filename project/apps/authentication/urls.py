@@ -2,7 +2,6 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from project.apps.authentication.views import (
     PhoneAuthViewSet,
-    EmailAuthViewSet,
     UsernameAuthViewSet,
     AccountBindingViewSet,
     UserProfileViewSet,
@@ -13,7 +12,6 @@ from project.apps.authentication.views import (
 
 router = DefaultRouter()
 router.register(r'phone', PhoneAuthViewSet, basename='phone-auth')
-router.register(r'email', EmailAuthViewSet, basename='email-auth')
 router.register(r'username', UsernameAuthViewSet, basename='username-auth')
 router.register(r'bindings', AccountBindingViewSet, basename='account-binding')
 router.register(r'profile', UserProfileViewSet, basename='user-profile')
