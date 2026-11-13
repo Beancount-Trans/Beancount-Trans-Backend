@@ -1170,9 +1170,20 @@ class EntryReviewResultsView(EntryReviewViewSet):
                 entry['edited_formatted'] = entry['edited_formatted'].rstrip() if entry['edited_formatted'] else ''
             entry['tag_details'] = ParseReviewService.get_effective_tag_details(entry)
 
+        # 标记需要人工审核的条目：兜底账户或结构异常。其余为「自动通过」，仍全量返回。
+        from project.apps.translate.services.entry_review_attention import annotate_entries
+
+        entries = annotate_entries(
+            entries,
+            getattr(config, 'reconciliation_fallback_account', None),
+        )
+        attention_count = sum(1 for entry in entries if entry.get('needs_review'))
+
         return Response({
             'entries': entries,
             'entry_count': len(entries),
+            'attention_entry_count': attention_count,
+            'auto_passed_entry_count': len(entries) - attention_count,
             'review_expires_at': EntryReviewQueueService.earliest_expires_at(request.user.id),
         }, status=status.HTTP_200_OK)
 

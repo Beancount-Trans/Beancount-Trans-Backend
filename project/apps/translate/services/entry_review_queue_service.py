@@ -311,6 +311,15 @@ class EntryReviewQueueService:
             entries.append(item)
         return entries
 
+    @classmethod
+    def count_needs_review(cls, user_id: int, fallback_account=None) -> int:
+        """统计需要人工审核的条目数（兜底账户或结构异常）。"""
+        from project.apps.translate.services.entry_review_attention import (
+            count_needs_review,
+        )
+
+        return count_needs_review(cls.list_entries(user_id), fallback_account)
+
     # ------------------------------------------------------------------
     # 待办辅助方法
     # ------------------------------------------------------------------

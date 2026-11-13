@@ -109,11 +109,16 @@ class TestEntryReviewResultsView:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['entry_count'] == 2
+        assert response.data['attention_entry_count'] == 0
+        assert response.data['auto_passed_entry_count'] == 2
         entries = response.data['entries']
         assert [e['uuid'] for e in entries] == ['entry-1', 'entry-2']
         for entry in entries:
             assert entry['file_id'] == parse_file.file_id
             assert entry['file_name'] == parse_file.file.name
+            # 默认条目账户非兜底，标记为自动通过
+            assert entry['needs_review'] is False
+            assert entry['review_reason'] is None
             # 去除末尾换行符
             assert not entry['formatted'].endswith('\n')
             assert not entry['edited_formatted'].endswith('\n')
@@ -121,6 +126,38 @@ class TestEntryReviewResultsView:
         assert response.data['review_expires_at'] == pytest.approx(
             data['review_expires_at']
         )
+
+    def test_get_results_marks_fallback_entries(
+        self, user, entry_review_task, parse_file
+    ):
+        """兜底账户条目标记为需关注，其余为自动通过"""
+        self.client.force_authenticate(user=user)
+
+        fallback_formatted = (
+            '2025-01-20 * "Test" "Fallback"\n'
+            '    Expenses:Other  100.00 CNY\n'
+            '    Assets:Test  -100.00 CNY\n'
+        )
+        _save_review(parse_file.file_id, [
+            _make_entry('entry-1'),
+            _make_entry('entry-2', formatted=fallback_formatted),
+        ])
+        _enqueue(user, [
+            {'file_id': parse_file.file_id, 'uuid': 'entry-1'},
+            {'file_id': parse_file.file_id, 'uuid': 'entry-2'},
+        ])
+
+        response = self.client.get('/api/translate/entry-review/results')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['entry_count'] == 2
+        assert response.data['attention_entry_count'] == 1
+        assert response.data['auto_passed_entry_count'] == 1
+        by_uuid = {entry['uuid']: entry for entry in response.data['entries']}
+        assert by_uuid['entry-1']['needs_review'] is False
+        assert by_uuid['entry-2']['needs_review'] is True
+        assert by_uuid['entry-2']['review_reason'] == 'category_fallback'
+        assert by_uuid['entry-2']['review_account'] == 'Expenses:Other'
 
     def test_get_results_cache_missing_returns_empty(self, user, entry_review_task, parse_file):
         """解析缓存缺失时，队列引用被剔除，返回空结果"""

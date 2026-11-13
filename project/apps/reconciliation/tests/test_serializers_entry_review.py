@@ -132,6 +132,52 @@ class TestScheduledTaskListSerializerEntryReview:
 
         assert data['entry_count'] == 2
 
+    def test_attention_entry_count_excludes_auto_passed_entries(
+        self,
+        user,
+        entry_review_task_for_serializer,
+        parse_file_for_serializer,
+    ):
+        """attention_entry_count 只统计兜底账户等需要人工审核的条目"""
+        formatted = (
+            '2025-01-20 * "Test" "Transaction"\n'
+            '    Expenses:Test  100.00 CNY\n'
+            '    Assets:Test  -100.00 CNY\n'
+        )
+        fallback = (
+            '2025-01-20 * "Test" "Fallback"\n'
+            '    Expenses:Other  100.00 CNY\n'
+            '    Assets:Test  -100.00 CNY\n'
+        )
+        ParseReviewService.save_parse_result(parse_file_for_serializer.file_id, {
+            'file_id': parse_file_for_serializer.file_id,
+            'formatted_data': [
+                {'uuid': 'entry-1', 'formatted': formatted, 'edited_formatted': formatted},
+                {'uuid': 'entry-2', 'formatted': fallback, 'edited_formatted': fallback},
+            ],
+            'created_at': time.time(),
+            'review_expires_at': time.time() + 86400,
+        })
+        EntryReviewQueueService.enqueue(user.id, [
+            {'file_id': parse_file_for_serializer.file_id, 'uuid': 'entry-1'},
+            {'file_id': parse_file_for_serializer.file_id, 'uuid': 'entry-2'},
+        ])
+
+        data = ScheduledTaskListSerializer(entry_review_task_for_serializer).data
+
+        assert data['entry_count'] == 2
+        assert data['attention_entry_count'] == 1
+
+    def test_attention_entry_count_zero_when_queue_empty(
+        self,
+        entry_review_task_for_serializer,
+    ):
+        """队列为空时 attention_entry_count 为 0"""
+        data = ScheduledTaskListSerializer(entry_review_task_for_serializer).data
+
+        assert data['entry_count'] == 0
+        assert data['attention_entry_count'] == 0
+
     def test_review_expires_at_is_earliest_in_queue(
         self,
         user,

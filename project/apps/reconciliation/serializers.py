@@ -41,6 +41,9 @@ class ScheduledTaskListSerializer(serializers.ModelSerializer):
     # 待审核条目数量（条目审核待办）
     entry_count = serializers.SerializerMethodField()
 
+    # 需要人工审核的条目数量（条目审核待办）
+    attention_entry_count = serializers.SerializerMethodField()
+
     # 循环待办展示标签（循环待办实例）
     recurring_label = serializers.SerializerMethodField()
 
@@ -55,6 +58,7 @@ class ScheduledTaskListSerializer(serializers.ModelSerializer):
             'status', 'status_display',
             'account_name', 'account_type',
             'review_expires_at', 'entry_count',
+            'attention_entry_count',
             'recurring_label', 'next_run_date',
             'created', 'modified'
         ]
@@ -88,6 +92,25 @@ class ScheduledTaskListSerializer(serializers.ModelSerializer):
             from project.apps.translate.services.entry_review_queue_service import EntryReviewQueueService
             return len(EntryReviewQueueService.list_refs(obj.object_id))
         return None
+
+    def get_attention_entry_count(self, obj):
+        """获取需要人工审核的条目数量（仅条目审核待办返回，否则为 None）"""
+        if obj.task_type != 'entry_review':
+            return None
+
+        from project.apps.translate.services.entry_review_queue_service import (
+            EntryReviewQueueService,
+        )
+        from project.utils.tools import get_user_config
+
+        content_object = obj.content_object
+        fallback_account = None
+        if content_object is not None:
+            config = get_user_config(content_object)
+            fallback_account = getattr(config, 'reconciliation_fallback_account', None)
+        return EntryReviewQueueService.count_needs_review(
+            obj.object_id, fallback_account
+        )
 
     def get_recurring_label(self, obj):
         """获取循环待办定义的展示标签（仅循环待办实例返回，否则为 None）"""
