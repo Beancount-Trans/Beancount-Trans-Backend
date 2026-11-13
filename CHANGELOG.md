@@ -1,5 +1,33 @@
 # Changelog
 
+## [6.3.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.2.0...6.3.0) (2026-11-13)
+
+### Features
+
+* **account:** 官方模板描述全覆盖并自动生成解析账户描述 ([e1dcdb8](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/e1dcdb8ccd8fa99f9b053124d27b3f8a0c2d3a1a))
+* **account:** 按托管态限制账户改名、币种与删除 ([95c56ab](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/95c56abe4372c407eee97d31590559a9b30ae646))
+* **account:** 账户写入边界落地，支持改名与反向对账 ([bf7e658](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/bf7e65814b0dcfe84c307b4ef3f74134568c3778))
+* **account:** 账户支持多币种并同步账本 open ([aa0a803](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/aa0a8038f20da88276fa0e2d02914b59effaa004))
+* **account:** 账户新增/启停/删除同步账本 open/note/close ([e841254](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/e841254f3d2fb89b43c9e7e1ea496bb2525d1f92))
+* **external-accounts:** 补充国内银行机构别名 ([80d8eff](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/80d8eff5d2e2f8fe2c65e90037fd40848e39740b))
+* **git:** 同步后可选自动导入账本新增账户 ([11f502f](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/11f502f84314e5d882c6aeda853ea2761f0e5d8c))
+* **git:** 同步默认自动导入账本新增账户 ([d22de96](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/d22de9637e7ed9fe4be2462cd2f56c50124be790))
+* **reconciliation:** 对账时间点默认沿用当天或上一条已完成对账 ([c47e236](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/c47e23653d19094440987e2531045e7f5e015b67))
+* **review:** 兜底账户条目标记需关注并统计 ([caff373](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/caff373c7ca28218e3e2ffe65cc4849aa334ddc2))
+* **translate:** 解析成功后自动补齐资产账户与映射 ([64d9059](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/64d9059ed01e9d2253a05d1e30c777be2a530b50))
+
+### Bug Fixes
+
+* **account:** 删除账户前释放外部账户绑定 ([4558502](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/45585029f2456939651e817c1377cd7420371015))
+* **account:** 实现平台账本 open 指令去重功能 ([f0df761](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/f0df7616149cdf9d0e2a73f35f569a7af4039116))
+* **account:** 根账户不再落库并清理非法账本指令 ([41f3368](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/41f3368384f68fb8e5eb6c01abe4d8fa7b66c1a6))
+* **account:** 账本已关闭账户允许清理平台记录 ([e3f20ed](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/e3f20ed3d5e2af6b11d7a42812adb7d9ea60d377))
+* **git同步:** Git 用户从账本中同步更新平台账户的币种 ([fb7b3a7](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/fb7b3a772f23c30309f46ef03e12a951df050a9d))
+* **reconciliation:** 自动补 pad 修复被后补交易打破的断言 ([1627712](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/1627712786b274348e02aa3ea83aba61d24d4cd2))
+* **translate:** 分期还款条目不继承折扣，避免每期多补收入行 ([7b4b93b](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/7b4b93bf31d20ad2d49efe1857d73b379527d7e7))
+* **translate:** 支付宝未匹配付款方式改落 Assets:Other ([fe20f16](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/fe20f163ec20a551ea730ac0a8b1003ca44cad64))
+* 对账币种优先取账户配置，账户未配置时回退账本 ([9fe5a0d](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/9fe5a0df296e647df085f725fe2b5183270432c6))
+
 ## [6.2.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.1.0...6.2.0) (2026-11-02)
 
 ### Features
