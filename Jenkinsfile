@@ -130,8 +130,11 @@ pipeline {
                     sh """
                         docker run --rm \
                             -v dhr2333-jenkins-share:/jenkins-share \
+                            --mount type=volume,source=dhr2333-jenkins-share,target=/code/beancount-trans/pretrained_models,volume-subpath=pretrained_models,readonly \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -e PYTHONUNBUFFERED=1 \
+                            -e TRANSFORMERS_OFFLINE=1 \
+                            -e HF_HUB_OFFLINE=1 \
                             -e DJANGO_SETTINGS_MODULE=project.settings.test \
                             -e DJANGO_SECRET_KEY=test-secret-key-for-jenkins-ci-${env.BUILD_NUMBER} \
                             -e DJANGO_DEBUG=True \
@@ -157,6 +160,7 @@ pipeline {
                                 python manage.py check --deploy || echo 'Django check failed, continuing...'
                                 set +e
                                 pytest --no-migrations --reuse-db \\
+                                    --timeout=300 --timeout-method=thread \\
                                     --junitxml=\${REPORTS_DIR}/junit.xml \\
                                     --html=\${REPORTS_DIR}/pytest-report.html \\
                                     --self-contained-html \\
