@@ -88,13 +88,20 @@ def _resolve_card_kind(owner_id: int, institution: Institution, tail: str, hinte
     return ''
 
 
-def _ensure_account(owner_id: int, path: str) -> tuple[Optional[Account], bool]:
+def _ensure_account(
+    owner_id: int, path: str, description: str = ''
+) -> tuple[Optional[Account], bool]:
     account = Account.objects.filter(owner_id=owner_id, account=path).first()
     if account is not None:
-        # 用户主动停用的账户不重新启用，也不接管
+        # 用户主动停用的账户不重新启用，也不接管；存量账户不回填描述
         return (account, False) if account.enable else (None, False)
     try:
-        return Account.objects.create(owner_id=owner_id, account=path, enable=True), True
+        return Account.objects.create(
+            owner_id=owner_id,
+            account=path,
+            enable=True,
+            description=description,
+        ), True
     except Exception:
         logger.warning('自动创建资产账户失败: owner=%s path=%s', owner_id, path, exc_info=True)
         return None, False
@@ -205,7 +212,9 @@ def provision_asset_account(owner_id: int, text: str, bill: str = '') -> Optiona
             return None
         account, account_created = binding.account, False
     else:
-        account, account_created = _ensure_account(owner_id, path)
+        account, account_created = _ensure_account(
+            owner_id, path, description=external.canonical_name
+        )
         if account is None:
             return None
         if not ExternalAccountBinding.objects.filter(account=account).exists():

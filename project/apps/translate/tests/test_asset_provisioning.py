@@ -63,6 +63,7 @@ class TestProvisionAssetAccount:
         assert result.account_created is True
 
         account = Account.objects.get(owner=user, account=result.account)
+        assert account.description == '招商银行储蓄卡(8837)'
         # 父账户由 Account.save 自动补齐
         assert Account.objects.filter(owner=user, account='Assets:Savings:Bank:CMB').exists()
 
@@ -101,6 +102,8 @@ class TestProvisionAssetAccount:
 
         assert result is not None
         assert result.account == 'Assets:Savings:Web:AliPay'
+        account = Account.objects.get(owner=user, account=result.account)
+        assert account.description == '支付宝余额'
         external = ExternalAccount.objects.get(owner=user, slot=PlatformSlot.ALIPAY_BALANCE)
         assert external.kind == InstrumentKind.WALLET
         assert external.product == 'balance'
@@ -146,7 +149,24 @@ class TestProvisionAssetAccount:
 
         assert result is not None
         assert result.account == 'Liabilities:CreditCard:Bank:CITIC:C6428'
+        account = Account.objects.get(owner=user, account=result.account)
+        assert account.description == '中信银行信用卡(6428)'
         assert ExternalAccount.objects.get(owner=user, tail='6428').kind == InstrumentKind.CREDIT_CARD
+
+    def test_existing_account_description_is_not_overwritten(self, user, institutions, own_mappings):
+        text = '招商银行储蓄卡(8837)'
+        Account.objects.create(
+            owner=user,
+            account='Assets:Savings:Bank:CMB:C8837',
+            description='我的工资卡',
+        )
+
+        result = provision_asset_account(user.id, text, bill='alipay')
+
+        assert result is not None
+        assert result.account_created is False
+        account = Account.objects.get(owner=user, account=result.account)
+        assert account.description == '我的工资卡'
 
     def test_kindless_card_with_ambiguous_kinds_is_skipped(self, user, institutions, own_mappings):
         citic = Institution.objects.get(code='CITIC')

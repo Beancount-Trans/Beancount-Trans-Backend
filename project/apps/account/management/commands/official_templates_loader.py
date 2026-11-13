@@ -252,6 +252,24 @@ def load_all_official_templates_data() -> dict[str, Any]:
     }
 
 
+def validate_account_descriptions(account_data: Optional[dict]) -> list[str]:
+    """校验会落库的模板项都有描述且不超长；返回错误列表。"""
+    errors: list[str] = []
+    if not account_data:
+        return ["account.json 缺失或无效"]
+    for item in account_data.get("items", []):
+        path = (item.get("account_path") or "").strip()
+        if ":" not in path:
+            # 根账户只作分组，不落库，不要求描述
+            continue
+        description = (item.get("description") or "").strip()
+        if not description:
+            errors.append(f"账户模板项缺少描述: {path}")
+        elif len(description) > 256:
+            errors.append(f"账户模板项描述超过 256 字: {path}")
+    return errors
+
+
 def validate_official_template_closure(
     account_data: Optional[dict],
     mapping_data: dict[str, Optional[dict]],

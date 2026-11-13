@@ -34,6 +34,7 @@ from project.apps.account.management.commands.official_templates_loader import (
     load_official_mapping_data,
     load_all_official_templates_data,
     get_official_templates_dir,
+    validate_account_descriptions,
     validate_official_template_closure,
 )
 
@@ -689,4 +690,26 @@ class TestOfficialTemplateConsistency(SimpleTestCase):
         errors = validate_official_template_closure(account_data, mapping_data)
         self.assertTrue(errors)
         self.assertIn('Expenses:Missing', errors[0])
+
+    def test_account_items_have_description(self):
+        """会落库的官方模板项都必须有描述，且不超过字段长度。"""
+        account_data = load_official_account_data()
+        missing = [
+            item['account_path']
+            for item in account_data['items']
+            if not (item.get('description') or '').strip()
+        ]
+        too_long = [
+            item['account_path']
+            for item in account_data['items']
+            if len((item.get('description') or '').strip()) > 256
+        ]
+        self.assertEqual(missing, [])
+        self.assertEqual(too_long, [])
+
+    def test_validator_reports_missing_description(self):
+        errors = validate_account_descriptions(
+            {'items': [{'account_path': 'Expenses:Other', 'description': ''}]}
+        )
+        self.assertEqual(errors, ['账户模板项缺少描述: Expenses:Other'])
 

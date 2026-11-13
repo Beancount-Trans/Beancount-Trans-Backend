@@ -1,14 +1,14 @@
 {
   "name": "中国用户标准账户模板",
   "description": "适用于中国用户的标准 Beancount 账户结构",
-  "version": "3.0.0",
-  "update_notes": "资产/负债收敛为支付宝与微信最小闭环；移除应收应付、支付宝信用三件套、小荷包、哈啰、阿里云与电信/联通手机号；储蓄卡、信用卡与运营商仅保留结构节点",
+  "version": "3.0.1",
+  "update_notes": "补全根账户与医疗设备描述，账户结构不变；资产/负债维持支付宝与微信最小闭环",
   "items": [
     {
       "account_path": "Assets",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "资产"
     },
     {
       "account_path": "Assets:Savings",
@@ -80,7 +80,7 @@
       "account_path": "Equity",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "权益"
     },
     {
       "account_path": "Equity:Adjustments",
@@ -98,7 +98,7 @@
       "account_path": "Expenses",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "支出"
     },
     {
       "account_path": "Expenses:Culture",
@@ -194,7 +194,7 @@
       "account_path": "Expenses:Health:Equipment",
       "enable": true,
       "reconciliation_rule": null,
-      "description": "直接医疗费用（门诊/挂号/体检/药品/疫苗/治疗费等）"
+      "description": "医疗设备（血压计、血糖仪、康复器械等）"
     },
     {
       "account_path": "Expenses:Health:Medical",
@@ -284,7 +284,7 @@
       "account_path": "Income",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "收入"
     },
     {
       "account_path": "Income:Active",
@@ -362,7 +362,7 @@
       "account_path": "Liabilities",
       "enable": true,
       "reconciliation_rule": null,
-      "description": ""
+      "description": "负债"
     },
     {
       "account_path": "Liabilities:CreditCard",

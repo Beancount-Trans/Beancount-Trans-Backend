@@ -266,12 +266,22 @@ class Account(BaseModel):
                 grandparent_path = ':'.join(parent_account_path.split(':')[:-1])
                 grandparent = self._create_parent_account(grandparent_path)
 
-                # 创建当前父账户（父账户不写入账本）
+                # 创建当前父账户（父账户不写入账本）；描述仅复用官方模板的精确匹配项
+                template_description = (
+                    AccountTemplateItem.objects.filter(
+                        account_path=parent_account_path, template__is_official=True
+                    )
+                    .order_by('id')
+                    .values_list('description', flat=True)
+                    .first()
+                    or ''
+                )
                 parent = Account(
                     account=parent_account_path,
                     owner=self.owner,
                     parent=grandparent,
-                    enable=True
+                    enable=True,
+                    description=template_description,
                 )
                 parent._skip_ledger_sync = True
                 parent.save()

@@ -76,6 +76,27 @@ def test_official_template_skips_root_items(user):
     assert 'open Assets\n' not in text
 
 
+def test_auto_parent_reuses_official_template_description(user):
+    template = AccountTemplate.objects.create(
+        name='父账户描述模板',
+        owner=user,
+        is_official=True,
+    )
+    AccountTemplateItem.objects.create(
+        template=template,
+        account_path='Assets:Savings:Bank',
+        description='储蓄卡（卡号账户由解析自动补齐）',
+    )
+
+    Account.objects.create(
+        account='Assets:Savings:Bank:CITIC:C6428',
+        owner=user,
+    )
+
+    parent = Account.objects.get(owner=user, account='Assets:Savings:Bank')
+    assert parent.description == '储蓄卡（卡号账户由解析自动补齐）'
+
+
 def test_cleanup_removes_historical_root(user):
     # 模拟历史脏数据：绕过 save 直接写入根账户
     Account.objects.bulk_create([Account(account='Assets', owner=user)])

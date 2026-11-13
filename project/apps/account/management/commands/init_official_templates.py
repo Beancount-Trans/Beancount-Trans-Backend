@@ -9,6 +9,7 @@ from project.apps.account.management.commands.official_templates_loader import (
     load_official_tag_data,
     load_all_official_templates_data,
     normalize_mapping_tag_paths,
+    validate_account_descriptions,
     validate_official_template_closure,
 )
 from project.apps.maps.models import Template, TemplateItem
@@ -86,7 +87,10 @@ class Command(BaseCommand):
             'income': data.get('mapping_income'),
             'assets': data.get('mapping_assets'),
         }
-        errors = validate_official_template_closure(data.get('account'), mapping_data)
+        account_data = data.get('account')
+        errors = validate_official_template_closure(account_data, mapping_data)
+        if account_data:
+            errors += validate_account_descriptions(account_data)
         if errors:
             raise CommandError(
                 '官方模板一致性校验失败:\n'
