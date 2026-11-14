@@ -77,6 +77,7 @@ class TestWriteCollectView:
             'message': '写入成功',
             'entry_count': 1,
             'bean': 'trans/collect.bean',
+            'is_first_write': False,
         }
 
         text = collect_path.read_text(encoding='utf-8')
@@ -87,6 +88,19 @@ class TestWriteCollectView:
         # include 已补齐
         main_path = Path(BeanFileManager.get_trans_main_bean_path(user))
         assert 'include "collect.bean"' in main_path.read_text(encoding='utf-8')
+
+    def test_first_write_flag(self, user, temp_assets):
+        """空账本首次写入返回 is_first_write=True"""
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            '/api/translate/write-collect',
+            {'entries': [{'uuid': 'entry-first', 'directive': VALID_DIRECTIVE}]},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['is_first_write'] is True
 
     def test_write_multiple_entries_separated_by_blank_line(self, user, temp_assets):
         """同批多个条目之间以空行分隔，便于阅读且符合 Beancount 惯例"""

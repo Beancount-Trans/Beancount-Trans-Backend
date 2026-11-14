@@ -485,6 +485,7 @@ class WriteCollectView(APIView):
         请求体：``{"entries": [{"uuid": "...", "directive": "..."}]}``
         """
         from project.apps.translate.utils.beancount_validator import BeancountValidator
+        from project.apps.translate.services.ledger_state import has_any_transactions
         from project.utils.file import BeanFileManager
 
         raw_entries = request.data.get('entries')
@@ -532,6 +533,7 @@ class WriteCollectView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            is_first_write = not has_any_transactions(request.user)
             BeanFileManager.append_to_collect_bean(request.user, directives)
 
             # 写入后维护对账条目：为被后补交易打破的 balance 断言补 pad，
@@ -548,6 +550,7 @@ class WriteCollectView(APIView):
             'message': '写入成功',
             'entry_count': len(directives),
             'bean': 'trans/collect.bean',
+            'is_first_write': is_first_write,
         }, status=status.HTTP_200_OK)
 
 
@@ -1543,6 +1546,7 @@ class EntryReviewConfirmView(EntryReviewViewSet):
         from project.apps.translate.services.recurring_bookkeeping_service import (
             RecurringBookkeepingService,
         )
+        from project.apps.translate.services.ledger_state import has_any_transactions
         from project.apps.translate.utils.beancount_validator import BeancountValidator
         from project.utils.file import BeanFileManager
 
@@ -1559,6 +1563,8 @@ class EntryReviewConfirmView(EntryReviewViewSet):
                 {'error': '待审核队列为空'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        is_first_write = not has_any_transactions(request.user)
 
         # 按 (source, file_id) 分组并保持顺序
         groups = []
@@ -1810,6 +1816,7 @@ class EntryReviewConfirmView(EntryReviewViewSet):
         return Response({
             'message': '确认写入成功',
             'files': written_files,
+            'is_first_write': is_first_write,
         }, status=status.HTTP_200_OK)
 
 
