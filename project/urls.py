@@ -17,7 +17,7 @@ from django.contrib import admin
 from django.urls import path, include
 from project.apps.maps.views import ExpenseViewSet, AssetsViewSet, IncomeViewSet, TemplateViewSet,TemplateItemViewSet
 from project.apps.translate.views.views import UserConfigAPI
-from project.apps.file_manager.views import DirectoryViewSet, FileViewSet
+from project.apps.file_manager.views import DirectoryViewSet, FileViewSet, LedgerExportView
 from project.apps.account.views import AccountViewSet, AccountTemplateViewSet
 from project.apps.tags.views import TagViewSet
 from project.views import authenticateByToken
@@ -75,6 +75,7 @@ urlpatterns = [
     # 业务相关的urls
     path('api/auth/', include('project.apps.authentication.urls')),  # 用户认证
     path('api/config/', UserConfigAPI.as_view(), name='user-config'),  # 格式化输出配置
+    path('api/ledger/export/', LedgerExportView.as_view(), name='ledger-export'),  # 账本导出
     path('api/translate/', include('project.apps.translate.urls')),  # 解析地址
     path('api/fava/', include('project.apps.fava_instances.urls')),  # fava容器服务
     path('api/git/', include('project.apps.git_repository.urls')),  # Git仓库管理

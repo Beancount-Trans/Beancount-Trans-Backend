@@ -1,10 +1,15 @@
 # project/apps/file_manager/views.py
 import os
+from urllib.parse import quote
+
 # from django.conf import settings
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
 # from minio.error import S3Error
@@ -16,6 +21,7 @@ from project.apps.common.permissions import IsOwnerOrAdminReadWriteOnly
 from project.utils.file import generate_file_hash
 from project.utils.storage_factory import get_storage_client
 from project.utils.file import BeanFileManager
+from .ledger_export import LedgerExportEmpty, build_ledger_zip
 
 
 class DirectoryViewSet(ModelViewSet):
@@ -473,3 +479,30 @@ class FileViewSet(ModelViewSet):
         # 删除数据库记录
         file_obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LedgerExportView(APIView):
+    """导出当前用户账本目录为 ZIP。"""
+
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    @extend_schema(
+        summary="导出账本 ZIP",
+        responses={
+            200: OpenApiResponse(description="账本 ZIP 文件流"),
+            404: OpenApiResponse(description="账本还没有内容"),
+        },
+    )
+    def get(self, request):
+        try:
+            payload, filename = build_ledger_zip(request.user)
+        except LedgerExportEmpty as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        response = HttpResponse(payload, content_type='application/zip')
+        response['Content-Disposition'] = (
+            f"attachment; filename*=UTF-8''{quote(filename)}"
+        )
+        response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+        return response
