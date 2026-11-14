@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.4.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.3.0...6.4.0) (2026-11-14)
+
+### Features
+
+* **file-manager:** 新增账本 ZIP 导出接口 ([8021c27](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/8021c278c704eb013e3457b899d47c273f315326))
+* **translate:** 写入接口返回首次写入标记 ([0e669d6](https://github.com/Beancount-Trans/Beancount-Trans-Backend/commit/0e669d675c22d8ae230afbb020d4a21a2b331a5c))
+
 ## [6.3.0](https://github.com/Beancount-Trans/Beancount-Trans-Backend/compare/6.2.0...6.3.0) (2026-11-13)
 
 ### Features
